@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Chip,
   IconButton,
@@ -29,7 +29,6 @@ import PrintIcon from "@mui/icons-material/Print";
 import { DataGrid } from "@mui/x-data-grid";
 import { supabase } from "../hook/supabaseClient";
 import GenerarPdf from "../componentes/GenerarPdf";
-import { generarpdfU } from "../utils/generarpdfu";
 
 import Tooltip from "@mui/material/Tooltip";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
