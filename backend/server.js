@@ -18,6 +18,7 @@ const supabase = createClient(
 const app = express();
 
 app.use(cors());
+app.options("*", cors());
 app.use(express.json());
 
 const prepararFacturaFiscal = (factura) => {
@@ -124,7 +125,7 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
         cuit,
         punto_venta,
         condicion_iva
-        ),
+      ),
         clientes!fk_facturas_cliente(*),
         detalle_factura(*)
       `,
