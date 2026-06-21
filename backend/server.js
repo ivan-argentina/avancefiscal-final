@@ -118,7 +118,13 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       .select(
         `
         *,
-        empresas!facturas_idempresa_fkey(*),
+        empresas!facturas_idempresa_fkey(
+        id,
+        razon_social,
+        cuit,
+        punto_venta,
+        condicion_iva
+        ),
         clientes!fk_facturas_cliente(*),
         detalle_factura(*)
       `,
