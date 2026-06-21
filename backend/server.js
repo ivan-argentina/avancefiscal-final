@@ -354,6 +354,8 @@ app.get("/api/fiscal/certificado/estado", (req, res) => {
   }
 });
 
-app.listen(3001, () => {
-  console.log("Servidor backend en http://localhost:3001");
+const PORT = Number(process.env.PORT) || 3001;
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor backend en puerto ${PORT}`);
 });
