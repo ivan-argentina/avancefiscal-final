@@ -110,6 +110,7 @@ app.get("/api/fiscal/ultimo", async (req, res) => {
 
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
+     console.log("VERSION BACKEND NUEVA - 21/06/2026");
     const { idFactura } = req.body;
 
     const { data, error } = await supabase
@@ -117,8 +118,8 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       .select(
         `
         *,
-        empresas(*),
-        clientes(*),
+        empresas!facturas_idempresa_fkey(*),
+        clientes!fk_facturas_cliente(*),
         detalle_factura(*)
       `,
       )
