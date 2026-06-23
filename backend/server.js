@@ -18,17 +18,6 @@ const supabase = createClient(
 const app = express();
 
 app.use(cors());
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://avancefiscal-final-kdim.vercel.app");
-  res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
 
 app.use(express.json());
 
@@ -122,7 +111,7 @@ app.get("/api/fiscal/ultimo", async (req, res) => {
 
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
-     console.log("VERSION BACKEND NUEVA - 21/06/2026");
+    console.log("VERSION BACKEND NUEVA - 21/06/2026");
     const { idFactura } = req.body;
 
     const { data, error } = await supabase
