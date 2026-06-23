@@ -24,6 +24,7 @@ app.use(express.json());
 const prepararFacturaFiscal = (factura) => {
   const empresa = factura.empresas;
   const cliente = factura.clientes;
+
   const detalle = factura.detalle_factura || [];
 
   return {
@@ -47,7 +48,7 @@ const prepararFacturaFiscal = (factura) => {
       numero_origen: factura.numero_origen,
 
       letra:
-        empresa.condicion_iva === "Responsable Monotributo"
+        empresa.condicion_iva === "Monotributista"
           ? "C"
           : factura.letra_comprobante,
 
