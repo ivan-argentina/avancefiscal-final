@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
+
 import fs from "fs";
 import forge from "node-forge";
 import soap from "soap";
@@ -44,28 +45,48 @@ const obtenerCertificadosEmpresa = async (cuitEmpresa) => {
 };
 
 const leerTA = (TA_PATH) => {
-  if (!fs.existsSync(TA_PATH)) return null;
+  if (!fs.existsSync(TA_PATH)) {
+    return null;
+  }
 
-  const ta = JSON.parse(fs.readFileSync(TA_PATH, "utf8"));
+  try {
+    const ta = JSON.parse(fs.readFileSync(TA_PATH, "utf8"));
 
-  if (ta?.token && ta?.sign && new Date() < new Date(ta.expirationTime)) {
-    return {
-      token: ta.token,
-      sign: ta.sign,
-    };
+    if (
+      ta?.token &&
+      ta?.sign &&
+      ta?.expirationTime &&
+      new Date() < new Date(ta.expirationTime)
+    ) {
+      console.log("TA válido encontrado");
+
+      return {
+        token: ta.token,
+        sign: ta.sign,
+      };
+    }
+  } catch (err) {
+    console.log("Error leyendo TA:", err.message);
   }
 
   return null;
 };
 
 export const obtenerTokenSign = async (cuitEmpresa) => {
+  console.log("CUIT EMPRESA:", cuitEmpresa);
+
   const TA_PATH = `./ta/ta-${cuitEmpresa}.json`;
+
+  console.log("Buscando TA:", TA_PATH);
+  console.log("Existe TA:", fs.existsSync(TA_PATH));
 
   const taGuardado = leerTA(TA_PATH);
 
   if (taGuardado) {
     return taGuardado;
   }
+
+  console.log("Generando nuevo TA...");
 
   const { cert, key } = await obtenerCertificadosEmpresa(cuitEmpresa);
 
@@ -75,14 +96,19 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
     <loginTicketRequest version="1.0">
       <header>
         <uniqueId>${Math.floor(Date.now() / 1000)}</uniqueId>
-        <generationTime>${new Date(now.getTime() - 600000).toISOString()}</generationTime>
-        <expirationTime>${new Date(now.getTime() + 10 * 60 * 1000).toISOString()}</expirationTime>
+        <generationTime>${new Date(
+          now.getTime() - 600000,
+        ).toISOString()}</generationTime>
+        <expirationTime>${new Date(
+          now.getTime() + 12 * 60 * 60 * 1000,
+        ).toISOString()}</expirationTime>
       </header>
       <service>wsfe</service>
     </loginTicketRequest>
   `;
 
   const p7 = forge.pkcs7.createSignedData();
+
   p7.content = forge.util.createBuffer(loginTicketRequest, "utf8");
 
   p7.addCertificate(cert);
@@ -92,9 +118,17 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
     certificate: cert,
     digestAlgorithm: forge.pki.oids.sha256,
     authenticatedAttributes: [
-      { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
-      { type: forge.pki.oids.messageDigest },
-      { type: forge.pki.oids.signingTime, value: new Date() },
+      {
+        type: forge.pki.oids.contentType,
+        value: forge.pki.oids.data,
+      },
+      {
+        type: forge.pki.oids.messageDigest,
+      },
+      {
+        type: forge.pki.oids.signingTime,
+        value: new Date(),
+      },
     ],
   });
 
@@ -103,12 +137,30 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
   const cms = forge.util.encode64(forge.asn1.toDer(p7.toAsn1()).getBytes());
 
   const client = await soap.createClientAsync(WSAA_URL);
-  const [result] = await client.loginCmsAsync({ in0: cms });
+
+  let result;
+
+  try {
+    [result] = await client.loginCmsAsync({
+      in0: cms,
+    });
+  } catch (error) {
+    console.log("ERROR WSAA:", error.message);
+
+    if (String(error.message).includes("alreadyAuthenticated")) {
+      throw new Error(
+        "AFIP informa que ya existe un TA activo para este certificado. Esperá unos minutos e intentá nuevamente.",
+      );
+    }
+
+    throw error;
+  }
 
   const xml = result.loginCmsReturn;
 
   const token = xml.match(/<token>(.*?)<\/token>/)?.[1];
   const sign = xml.match(/<sign>(.*?)<\/sign>/)?.[1];
+
   const expirationTimeText = xml.match(
     /<expirationTime>(.*?)<\/expirationTime>/,
   )?.[1];
@@ -119,8 +171,13 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
     expirationTime: expirationTimeText,
   };
 
-  fs.mkdirSync("./ta", { recursive: true });
+  fs.mkdirSync("./ta", {
+    recursive: true,
+  });
+
   fs.writeFileSync(TA_PATH, JSON.stringify(ta, null, 2));
+
+  console.log("Nuevo TA guardado");
 
   return {
     token,
