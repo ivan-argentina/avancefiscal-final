@@ -413,12 +413,16 @@ export default function Factura() {
 
       const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
+      console.log("Letra Comprobante", letraComprobante);
       const datosPdfFiscal = {
         empresa: respuestaFiscal.factura.empresas,
         numeroFactura: respuestaFiscal.afip.numeroFiscal,
         fecha: respuestaFiscal.factura.fecha,
         tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
-        letraComprobante: respuestaFiscal.factura.letra_comprobante,
+        letraComprobante:
+          respuestaFiscal.factura.empresas?.condicion_iva === "Monotributista"
+            ? "C"
+            : respuestaFiscal.factura.letra_comprobante,
         formaPago: respuestaFiscal.factura.forma_pago,
         clienteSeleccionado,
         detalle,
