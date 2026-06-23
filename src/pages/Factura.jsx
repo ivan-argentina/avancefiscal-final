@@ -97,17 +97,20 @@ export default function Factura() {
   const obtenerLetraComprobante = (tipoComprobante, clienteSeleccionado) => {
     if (empresa?.condicion_iva === "Monotributista") return "C";
 
-    if (tipo === "remito" || tipo === "presupuesto") return "X";
+    if (tipoComprobante === "remito" || tipoComprobante === "presupuesto") {
+      return "X";
+    }
 
-    if (cliente?.condicion_iva === "Responsable Inscripto") return "A";
+    if (clienteSeleccionado?.condicion_iva === "Responsable Inscripto")
+      return "A";
 
     return "B";
   };
 
   useEffect(() => {
-    const letra = obtenerLetraComprobante(tipoComprobante, clienteSeleccionado);
+    const letra = obtenerLetraComprobante();
     setLetraComprobante(letra);
-  }, [tipoComprobante, clienteSeleccionado]);
+  }, [empresa, tipoComprobante, clienteSeleccionado]);
 
   const seleccionarArticulo = (articulo) => {
     if (!articulo) return;
