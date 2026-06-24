@@ -308,11 +308,26 @@ app.get("/api/fiscal/condiciones-iva", async (req, res) => {
     });
   }
 });
-app.get("/api/fiscal/certificado/estado", (req, res) => {
+app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
   try {
-    const certPath = "./certificados/empresa-prueba/certificado.crt";
+    const { cuitEmpresa } = req.params;
 
-    const certPem = fs.readFileSync(certPath, "utf8");
+    const { data: empresa, error } = await supabase
+      .from("empresas")
+      .select("certificado_crt")
+      .eq("cuit", String(cuitEmpresa))
+      .single();
+
+    if (error) throw error;
+
+    const { data: certFile, error: certError } = await supabase.storage
+      .from("afip-certificados")
+      .download(empresa.certificado_crt);
+
+    if (certError) throw certError;
+
+    const certPem = Buffer.from(await certFile.arrayBuffer()).toString("utf8");
+
     const cert = forge.pki.certificateFromPem(certPem);
 
     const vence = cert.validity.notAfter;
