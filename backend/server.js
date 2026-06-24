@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { obtenerTokenSign } from "./wsaa.js";
 import { obtenerUltimoComprobante, autorizarFactura } from "./wsfe.js";
 import soap from "soap";
+import { Resend } from "resend";
 
 dotenv.config();
 
@@ -14,7 +15,7 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
 );
-
+const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
 
 app.use(cors());
@@ -109,6 +110,16 @@ app.get("/api/fiscal/ultimo", async (req, res) => {
     });
   }
 });
+
+const formatearFechaAfip = (fechaAfip) => {
+  if (!fechaAfip) return null;
+
+  const texto = String(fechaAfip);
+
+  if (texto.length !== 8) return null;
+
+  return `${texto.substring(0, 4)}-${texto.substring(4, 6)}-${texto.substring(6, 8)}`;
+};
 
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
@@ -239,8 +250,13 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
 
     const cae = detalleAfip.CAE;
     const caeVto = detalleAfip.CAEFchVto;
+    console.log("CAE VTO RECIBIDO:", caeVto);
+    console.log("TIPO:", typeof caeVto);
     const numeroFiscal = detalleAfip.CbteDesde;
 
+    console.log("CAE VTO RECIBIDO:", caeVto);
+    console.log("TIPO:", typeof caeVto);
+    console.log("DETALLE AFIP:", JSON.stringify(detalleAfip, null, 2));
     const { error: updateError } = await supabase
       .from("facturas")
       .update({
@@ -351,6 +367,39 @@ app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
       diasRestantes,
     });
   } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/email/factura", async (req, res) => {
+  try {
+    const { to, subject, html } = req.body;
+
+    if (!to) {
+      return res.status(400).json({
+        ok: false,
+        error: "Falta email del cliente",
+      });
+    }
+
+    const resultado = await resend.emails.send({
+      from: "Avance Fiscal <onboarding@resend.dev>",
+      to,
+      subject: subject || "Factura",
+      html: html || "<p>Adjuntamos comprobante fiscal.</p>",
+    });
+
+    res.json({
+      ok: true,
+      mensaje: "Email enviado correctamente",
+      resultado,
+    });
+  } catch (error) {
+    console.log("Error enviando email:", error);
+
     res.status(500).json({
       ok: false,
       error: error.message,
