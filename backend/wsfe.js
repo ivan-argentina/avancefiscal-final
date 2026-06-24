@@ -137,8 +137,8 @@ export const autorizarFactura = async ({
   console.log("ENVIANDO COMPROBANTE:", {
     CbteTipo: tipoComprobanteAfip,
     PtoVta: Number(puntoVenta),
-    CbteDesde: proximoNumero,
-    CbteHasta: proximoNumero,
+    CbteDesde: Number(proximoNumero),
+    CbteHasta: Number(proximoNumero),
   });
   const [result] = await client.FECAESolicitarAsync({
     Auth: {
