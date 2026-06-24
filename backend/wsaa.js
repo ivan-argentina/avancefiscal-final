@@ -73,21 +73,12 @@ const leerTA = (TA_PATH) => {
 };
 
 export const obtenerTokenSign = async (cuitEmpresa) => {
-  console.log("CUIT EMPRESA:", cuitEmpresa);
-
   const TA_PATH = `./ta/ta-${cuitEmpresa}.json`;
-
-  console.log("Buscando TA:", TA_PATH);
-  console.log("Existe TA:", fs.existsSync(TA_PATH));
-
   const taGuardado = leerTA(TA_PATH);
 
   if (taGuardado) {
     return taGuardado;
   }
-
-  console.log("Generando nuevo TA...");
-
   const { cert, key } = await obtenerCertificadosEmpresa(cuitEmpresa);
 
   const now = new Date();
@@ -176,8 +167,6 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
   });
 
   fs.writeFileSync(TA_PATH, JSON.stringify(ta, null, 2));
-
-  console.log("Nuevo TA guardado");
 
   return {
     token,

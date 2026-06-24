@@ -48,7 +48,7 @@ export default function Factura() {
   const [fotoSeleccionada, setFotoSeleccionada] = useState("");
 
   const [numeroFactura, setNumeroFactura] = useState("");
-  const [letraComprobante, setLetraComprobante] = useState("");
+  const [letraComprobante, setLetraComprobante] = useState("B");
   const [empresa, setEmpresa] = useState(null);
   const [pdfData, setPdfData] = useState(null);
   const [generarPdfPendiente, setGenerarPdfPendiente] = useState(false);
@@ -69,8 +69,6 @@ export default function Factura() {
     if (!generarPdfPendiente || !pdfData) return;
 
     const timer = setTimeout(() => {
-      //console.log("REF PDF:", facturaPdfRef.current);
-
       if (!facturaPdfRef.current) {
         console.log("Todavía no está listo el PDF");
         return;
@@ -413,7 +411,6 @@ export default function Factura() {
 
       const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
-      console.log("Letra Comprobante", letraComprobante);
       const datosPdfFiscal = {
         empresa: respuestaFiscal.factura.empresas,
         numeroFactura: respuestaFiscal.afip.numeroFiscal,
@@ -617,7 +614,7 @@ export default function Factura() {
         }}
       >
         <Grid container spacing={2}>
-          <Grid size={{ xs: 12, md: 4 }}>
+          <Grid size={{ xs: 12, md: 5 }}>
             <TextField
               select
               label="Cliente"
@@ -685,17 +682,6 @@ export default function Factura() {
               <MenuItem value="presupuesto">Presupuesto</MenuItem>
             </TextField>
           </Grid>
-
-          <Grid size={{ xs: 12, md: 2 }}>
-            <TextField
-              label="Letra"
-              fullWidth
-              size="small"
-              value={letraComprobante}
-              InputProps={{ readOnly: true }}
-            />
-          </Grid>
-
           <Grid size={{ xs: 12 }}>
             <Paper
               variant="outlined"

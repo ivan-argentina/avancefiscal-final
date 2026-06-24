@@ -7,6 +7,8 @@ import {
   Grid,
   Typography,
   LinearProgress,
+  MenuItem,
+  TextField,
 } from "@mui/material";
 import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
@@ -28,6 +30,14 @@ export default function Dashboard() {
     disponible: 0,
     porcentaje: 0,
   });
+  const [tipoImpresora, setTipoImpresora] = useState(
+    localStorage.getItem("tipoImpresora") || "comandera",
+  );
+
+  const cambiarTipoImpresora = (valor) => {
+    setTipoImpresora(valor);
+    localStorage.setItem("tipoImpresora", valor);
+  };
 
   const cargarResumen = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
@@ -161,7 +171,29 @@ export default function Dashboard() {
 
   const cargarEstadoCertificado = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/fiscal/certificado/estado`);
+      const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+      if (!usuario?.id) {
+        console.log("No hay usuario logueado");
+        return;
+      }
+
+      const { data: relacion, error } = await supabase
+        .from("usuario_empresa")
+        .select("empresas(cuit)")
+        .eq("idusuario", usuario.id)
+        .single();
+
+      if (error) throw error;
+
+      const cuitEmpresa = relacion?.empresas?.cuit;
+
+      if (!cuitEmpresa) return;
+
+      const res = await fetch(
+        `${API_URL}/api/fiscal/certificado/estado/${cuitEmpresa}`,
+      );
+
       const data = await res.json();
 
       if (data.ok) {
@@ -195,9 +227,6 @@ export default function Dashboard() {
 
   const estadoCert = certificado?.estado || "vigente";
   const config = configCertificado[estadoCert];
-
-  console.log("MONOTRIBUTO:", monotributo);
-  console.log("CONDICION IVA:", monotributo.condicionIva);
 
   return (
     <Box sx={{ p: 2 }}>
@@ -282,7 +311,7 @@ export default function Dashboard() {
         </Grid>
 
         {monotributo.condicionIva === "Monotributista" && (
-          <Grid size={{ xs: 12, md: 6 }}>
+          <Grid size={{ xs: 12, md: 3 }}>
             <Card>
               <CardContent>
                 <Typography variant="subtitle2" color="text.secondary">
@@ -339,6 +368,22 @@ export default function Dashboard() {
             </Card>
           </Grid>
         )}
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            select
+            label="Tipo de impresora"
+            size="small"
+            value={tipoImpresora}
+            onChange={(e) => {
+              setTipoImpresora(e.target.value);
+              localStorage.setItem("tipoImpresora", e.target.value);
+            }}
+            sx={{ minWidth: 220 }}
+          >
+            <MenuItem value="comandera">Comandera</MenuItem>
+            <MenuItem value="laser">Láser</MenuItem>
+          </TextField>
+        </Grid>
       </Grid>
     </Box>
   );

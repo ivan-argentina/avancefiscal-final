@@ -112,7 +112,6 @@ app.get("/api/fiscal/ultimo", async (req, res) => {
 
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
-    console.log("VERSION BACKEND NUEVA - 21/06/2026");
     const { idFactura } = req.body;
 
     const { data, error } = await supabase
@@ -183,9 +182,9 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       docNro,
       tipoComprobante: fiscal.comprobante.tipo_comprobante,
     });
-    console.log("CONDICION IVA:", fiscal.empresa.condicionIva);
-    console.log("LETRA:", fiscal.comprobante.letra);
-    console.log("TIPO:", fiscal.comprobante.tipo_comprobante);
+    //console.log("CONDICION IVA:", fiscal.empresa.condicionIva);
+    //console.log("LETRA:", fiscal.comprobante.letra);
+    //console.log("TIPO:", fiscal.comprobante.tipo_comprobante);
 
     const resultadoAfip = await autorizarFactura({
       cuit: cuitEmpresa,
