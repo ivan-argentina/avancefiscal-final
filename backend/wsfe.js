@@ -76,6 +76,10 @@ export const autorizarFactura = async ({
   });
 
   const proximoNumero = Number(ultimo.CbteNro || 0) + 1;
+  console.log("ULTIMO AFIP COMPLETO:", JSON.stringify(ultimo, null, 2));
+  console.log("ULTIMO CBTE NRO:", ultimo?.CbteNro);
+  console.log("PROXIMO NUMERO CALCULADO:", proximoNumero);
+
   const fecha = new Date().toISOString().slice(0, 10).replaceAll("-", "");
 
   const datosAsociados =
@@ -130,6 +134,12 @@ export const autorizarFactura = async ({
     ),
   );
 
+  console.log("ENVIANDO COMPROBANTE:", {
+    CbteTipo: tipoComprobanteAfip,
+    PtoVta: Number(puntoVenta),
+    CbteDesde: proximoNumero,
+    CbteHasta: proximoNumero,
+  });
   const [result] = await client.FECAESolicitarAsync({
     Auth: {
       Token: auth.token,
