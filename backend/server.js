@@ -247,14 +247,19 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
         resultadoAfip,
       });
     }
-
+    const calcularVencimientoCae = () => {
+      const fecha = new Date();
+      fecha.setDate(fecha.getDate() + 10);
+      return fecha.toISOString().slice(0, 10);
+    };
     const cae = detalleAfip.CAE;
-    const caeVto = detalleAfip.CAEFchVto;
-    console.log("CAE VTO RECIBIDO:", caeVto);
-    console.log("TIPO:", typeof caeVto);
+    const caeVtoAfip = detalleAfip.CAEFchVto;
+    const caeVto = calcularVencimientoCae();
     const numeroFiscal = detalleAfip.CbteDesde;
 
-    console.log("CAE VTO RECIBIDO:", caeVto);
+    console.log("CAE VTO AFIP RECIBIDO:", caeVtoAfip);
+    console.log("CAE VTO USADO:", caeVto);
+
     console.log("TIPO:", typeof caeVto);
     console.log("DETALLE AFIP:", JSON.stringify(detalleAfip, null, 2));
     const { error: updateError } = await supabase
