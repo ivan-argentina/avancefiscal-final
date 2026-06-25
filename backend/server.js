@@ -131,11 +131,15 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
         `
         *,
         empresas!facturas_idempresa_fkey(
-        id,
-        razon_social,
-        cuit,
-        punto_venta,
-        condicion_iva
+         id,
+         razon_social,
+         cuit,
+         punto_venta,
+         condicion_iva,
+         direccion,
+         ingresos_brutos,
+         inicio_actividades,
+         ciudades!empresas_idciudad_fkey(nombre)
       ),
         clientes!fk_facturas_cliente(*),
         detalle_factura(*)
@@ -256,12 +260,6 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
     const caeVtoAfip = detalleAfip.CAEFchVto;
     const caeVto = calcularVencimientoCae();
     const numeroFiscal = detalleAfip.CbteDesde;
-
-    console.log("CAE VTO AFIP RECIBIDO:", caeVtoAfip);
-    console.log("CAE VTO USADO:", caeVto);
-
-    console.log("TIPO:", typeof caeVto);
-    console.log("DETALLE AFIP:", JSON.stringify(detalleAfip, null, 2));
     const { error: updateError } = await supabase
       .from("facturas")
       .update({
