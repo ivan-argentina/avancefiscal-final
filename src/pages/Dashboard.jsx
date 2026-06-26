@@ -17,25 +17,6 @@ import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 const API_URL = "https://gestion-production-e3f6.up.railway.app";
 
 export default function Dashboard() {
-  const enviarPorEmail = async () => {
-    console.log("CLICK EMAIL");
-    const res = await fetch("http://localhost:3001/api/email/factura", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        to: "sistemaamedida19@gmail.com",
-        subject: "Prueba Avance Fiscal",
-        html: "<h2>Email de prueba</h2><p>Funciona correctamente.</p>",
-      }),
-    });
-
-    const data = await res.json();
-
-    console.log("REPUESTA EMAIL", data);
-  };
-
   const [certificado, setCertificado] = useState(null);
   const [resumen, setResumen] = useState({
     ventasMes: 0,
@@ -403,16 +384,6 @@ export default function Dashboard() {
             <MenuItem value="comandera">Comandera</MenuItem>
             <MenuItem value="laser">Láser</MenuItem>
           </TextField>
-        </Grid>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Button
-            size="small"
-            variant="contained"
-            color="success"
-            onClick={enviarPorEmail}
-          >
-            Email
-          </Button>
         </Grid>
       </Grid>
     </Box>

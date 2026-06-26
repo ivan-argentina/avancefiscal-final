@@ -50,6 +50,7 @@ export default function Facturas() {
 
     navigate("/factura");
   };
+  const API_URL = import.meta.env.VITE_API_URL;
 
   const enviarFacturaEmail = async (factura) => {
     if (enviandoEmail) return;
@@ -169,6 +170,7 @@ export default function Facturas() {
       cuit,
       direccion,
       telefono,
+      email,
       idciudad,
       ciudades(nombre)
     ),
