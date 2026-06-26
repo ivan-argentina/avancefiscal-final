@@ -379,7 +379,7 @@ app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
 
 app.post("/api/email/factura", async (req, res) => {
   try {
-    const { to, subject, html } = req.body;
+    const { to, subject, html, pdfBase64, filename } = req.body;
 
     if (!to) {
       return res.status(400).json({
@@ -388,12 +388,23 @@ app.post("/api/email/factura", async (req, res) => {
       });
     }
 
-    const resultado = await resend.emails.send({
+    const emailData = {
       from: "Avance Fiscal <onboarding@resend.dev>",
       to,
       subject: subject || "Factura",
       html: html || "<p>Adjuntamos comprobante fiscal.</p>",
-    });
+    };
+
+    if (pdfBase64) {
+      emailData.attachments = [
+        {
+          filename: filename || "factura.pdf",
+          content: pdfBase64,
+        },
+      ];
+    }
+
+    const resultado = await resend.emails.send(emailData);
 
     res.json({
       ok: true,
