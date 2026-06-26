@@ -1,10 +1,14 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 
-export const generarpdfU = async (elemento, nombre = "factura.pdf") => {
+export const generarpdfU = async (
+  elemento,
+  nombre = "factura.pdf",
+  opciones = {},
+) => {
   if (!elemento) {
     console.log("No hay elemento para generar PDF");
-    return;
+    return null;
   }
 
   const canvas = await html2canvas(elemento, {
@@ -15,7 +19,7 @@ export const generarpdfU = async (elemento, nombre = "factura.pdf") => {
 
   if (!canvas.width || !canvas.height) {
     console.log("El elemento no tiene tamaño válido para PDF");
-    return;
+    return null;
   }
 
   const imgData = canvas.toDataURL("image/jpeg", 1.0);
@@ -37,5 +41,14 @@ export const generarpdfU = async (elemento, nombre = "factura.pdf") => {
     heightLeft -= pageHeight;
   }
 
-  pdf.save(nombre);
+  const base64 = pdf.output("datauristring").split(",")[1];
+
+  if (opciones.descargar !== false) {
+    pdf.save(nombre);
+  }
+
+  return {
+    pdfBase64: base64,
+    filename: nombre,
+  };
 };

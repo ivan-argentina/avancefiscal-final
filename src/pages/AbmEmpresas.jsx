@@ -39,6 +39,8 @@ export default function AbmEmpresas() {
   const [certificadoVencimiento, setCertificadoVencimiento] = useState("");
   const [certificadoCrt, setCertificadoCrt] = useState("");
   const [certificadoKey, setCertificadoKey] = useState("");
+  const [ingresosBrutos, setIngresosBrutos] = useState("");
+  const [inicioActividades, setInicioActividades] = useState("");
 
   const handleCuitChange = (e) => {
     const valor = e.target.value.replace(/\D/g, "");
@@ -107,6 +109,8 @@ export default function AbmEmpresas() {
     setActivo(true);
     setCertificadoCrt("");
     setCertificadoKey("");
+    setIngresosBrutos("");
+    setInicioActividades("");
   };
   const guardarEmpresa = async () => {
     //Cargo los certificados
@@ -137,6 +141,8 @@ export default function AbmEmpresas() {
       if (error) throw error;
     }
     //***Hasta Aca */
+    console.log("RUTA CERTIFICADO:", rutaCertificado);
+    console.log("RUTA KEY:", rutaKey);
     const payload = {
       razon_social: razonSocial.trim(),
       nombre_fantasia: nombreFantacia.trim(),
@@ -148,10 +154,16 @@ export default function AbmEmpresas() {
       condicion_iva: condicionIva,
       categoria_monotributo:
         condicionIva === "Monotributista" ? categoriaMonotributo : null,
-      certificado_crt: rutaCertificado,
-      certificado_key: rutaKey,
-      certificado_vencimiento: certificadoVencimiento || null,
+      ingresos_brutos: ingresosBrutos,
+      inicio_actividades: inicioActividades || null,
     };
+    if (rutaCertificado) {
+      payload.certificado_crt = rutaCertificado;
+    }
+    if (rutaKey) {
+      payload.certificado_key = rutaKey;
+    }
+
     if (!payload.razon_social) {
       alert("ingrese razon social");
       return;
@@ -197,6 +209,8 @@ export default function AbmEmpresas() {
     setCertificadoVencimiento("");
     setCertificadoCrt(empresa.certificado_crt || "");
     setCertificadoKey(empresa.certificado_key || "");
+    setIngresosBrutos(empresa.ingresos_brutos || "");
+    setInicioActividades(empresa.inicio_actividades || "");
   };
 
   const eliminarEmpresa = async (id) => {
@@ -299,7 +313,7 @@ export default function AbmEmpresas() {
               onChange={(e) => setDireccion(e.target.value)}
             />
           </Grid>
-          <Grid size={{ xs: 12, md: 3 }}>
+          <Grid size={{ xs: 12, md: 2 }}>
             <TextField
               select
               label="Ciudad"
@@ -316,7 +330,7 @@ export default function AbmEmpresas() {
                 ))}
             </TextField>
           </Grid>
-          <Grid size={{ xs: 12, md: 3 }}>
+          <Grid size={{ xs: 12, md: 2 }}>
             <TextField
               label="Teléfono"
               value={telefono}
@@ -375,6 +389,27 @@ export default function AbmEmpresas() {
                 )}
               </TextField>
             )}
+          </Grid>
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              label="Ingresos Brutos"
+              fullWidth
+              size="small"
+              value={ingresosBrutos}
+              onChange={(e) => setIngresosBrutos(e.target.value)}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              label="Inicio de Actividades"
+              type="date"
+              fullWidth
+              size="small"
+              value={inicioActividades}
+              onChange={(e) => setInicioActividades(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 2 }}>
             <TextField

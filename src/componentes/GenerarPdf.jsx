@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useState } from "react";
-
 import QRCode from "qrcode";
 import { formatearCuit } from "../utils/formatearCuit";
 import {
@@ -37,6 +36,12 @@ const GenerarPdf = forwardRef(
     },
     ref,
   ) => {
+    const formatearFecha = (fecha) => {
+      if (!fecha) return "-";
+
+      const [anio, mes, dia] = fecha.split("-");
+      return `${dia}/${mes}/${anio}`;
+    };
     const formatoMoneda = (valor) =>
       new Intl.NumberFormat("es-AR", {
         minimumFractionDigits: 2,
@@ -53,14 +58,6 @@ const GenerarPdf = forwardRef(
       if (!tipo) return "-";
 
       return tipo.replaceAll("_", " ").toUpperCase();
-    };
-
-    const formatearFecha = (fecha) => {
-      if (!fecha) return "-";
-
-      const [anio, mes, dia] = String(fecha).split("-");
-
-      return `${dia}/${mes}/${anio}`;
     };
 
     const formatearFechaAfip = (fecha) => {
@@ -161,6 +158,20 @@ const GenerarPdf = forwardRef(
             }}
           >
             <Box sx={{ p: 2 }}>
+              {empresa?.logo_url && (
+                <Box
+                  component="img"
+                  src={empresa.logo_url}
+                  alt="Logo empresa"
+                  sx={{
+                    width: 120,
+                    maxHeight: 90,
+                    objectFit: "contain",
+                    mb: 1,
+                    ml: 1,
+                  }}
+                />
+              )}
               <Typography
                 sx={{
                   fontSize: 28,
@@ -179,12 +190,12 @@ const GenerarPdf = forwardRef(
 
               <Typography sx={{ fontSize: 13, mb: 0.3 }}>
                 <strong>Domicilio Comercial:</strong>{" "}
-                {empresa?.domicilio || empresa?.direccion || "-"}
+                {empresa?.direccion || "-"}
               </Typography>
 
               <Typography sx={{ fontSize: 13, mb: 0.3 }}>
                 <strong>Localidad:</strong>{" "}
-                {empresa?.localidad || empresa?.ciudad || "-"}
+                {empresa?.localidad || empresa?.ciudades?.nombre || "-"}
               </Typography>
 
               <Typography sx={{ fontSize: 13, mb: 0.3 }}>
@@ -192,15 +203,15 @@ const GenerarPdf = forwardRef(
                 {empresa?.condicion_iva || empresa?.condicionIva || "-"}
               </Typography>
 
-              <Box sx={{ mt: 2 }}>
-                <Typography sx={{ fontSize: 12 }}>
+              <Box>
+                <Typography sx={{ fontSize: 13, mb: 0.3 }}>
                   <strong>Ingresos Brutos:</strong>{" "}
                   {empresa?.ingresos_brutos || "-"}
                 </Typography>
 
-                <Typography sx={{ fontSize: 12 }}>
+                <Typography sx={{ fontSize: 13, mb: 0.3 }}>
                   <strong>Fecha de Inicio de Actividades:</strong>{" "}
-                  {empresa?.inicio_actividades || "-"}
+                  {formatearFecha(empresa?.inicio_actividades)}
                 </Typography>
               </Box>
             </Box>

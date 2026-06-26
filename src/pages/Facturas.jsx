@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import UndoIcon from "@mui/icons-material/Undo";
+import EmailIcon from "@mui/icons-material/Email";
 import WhatsAppIcon from "@mui/icons-material/WhatsApp";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
@@ -8,7 +9,7 @@ import { generarpdfU } from "../utils/generarpdfu";
 import GenerarPdf from "../componentes/GenerarPdf";
 import { DataGrid } from "@mui/x-data-grid";
 import { Button } from "@mui/material";
-
+import { Resend } from "resend";
 import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import Tooltip from "@mui/material/Tooltip";
@@ -31,6 +32,7 @@ import {
 } from "@mui/material";
 
 export default function Facturas() {
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [facturas, setFacturas] = useState([]);
   const [detalleFactura, setDetalleFactura] = useState([]);
   const [facturaSeleccionada, setFacturaSeleccionada] = useState(null);
@@ -38,6 +40,7 @@ export default function Facturas() {
   const [filtro, setFiltro] = useState("");
   const [pdfData, setPdfData] = useState(null);
   const [pdfNombre, setPdfNombre] = useState("");
+  const [emailPendiente, setEmailPendiente] = useState(null);
 
   const facturaPdfRef = useRef();
 
@@ -46,6 +49,20 @@ export default function Facturas() {
     localStorage.setItem("notaCreditoOrigen", JSON.stringify(factura));
 
     navigate("/factura");
+  };
+
+  const enviarFacturaEmail = async (factura) => {
+    if (enviandoEmail) return;
+
+    const emailCliente = factura.clientes?.email;
+
+    if (!emailCliente) {
+      alert("El cliente no tiene email cargado.");
+      return;
+    }
+
+    setEnviandoEmail(true);
+    await descargarPdfFactura(factura, "email");
   };
 
   const autorizarFacturaPendiente = async (factura) => {
@@ -135,6 +152,17 @@ export default function Facturas() {
     cae_vencimiento,
     afip_error_code,
     afip_error_msg,
+    
+    empresas!facturas_idempresa_fkey(
+      razon_social,
+      cuit,
+      direccion,
+      condicion_iva,
+      ingresos_brutos,
+      inicio_actividades,
+      logo_url,
+      ciudades!empresas_idciudad_fkey(nombre)
+    ),
 
     clientes (
       nombre,
@@ -207,13 +235,19 @@ export default function Facturas() {
     setOpenDetalle(true);
   };
 
-  const descargarPdfFactura = async (factura) => {
+  const descargarPdfFactura = async (factura, modo = "descargar") => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     const { data: empresaData } = await supabase
       .from("empresas")
-      .select("*")
+      .select(
+        `
+        *,
+        ciudades!empresas_idciudad_fkey(nombre)
+        `,
+      )
+
       .eq("id", idEmpresa)
       .single();
 
@@ -246,7 +280,10 @@ export default function Facturas() {
     }));
 
     setPdfData({
-      empresa: empresaData,
+      empresa: {
+        ...empresaData,
+        localidad: empresaData?.ciudades?.nombre || "-",
+      },
       numeroFactura: factura.numero_fiscal,
       fecha: factura.fecha,
       tipoComprobante: factura.tipo_comprobante,
@@ -267,14 +304,77 @@ export default function Facturas() {
         ? "nota-credito"
         : "factura";
 
-    setPdfNombre(
-      `${nombreComprobante}-${factura.letra_comprobante || "C"}-${String(
-        factura.punto_venta || 1,
-      ).padStart(4, "0")}-${String(
-        factura.numero_fiscal || factura.numero || 0,
-      ).padStart(8, "0")}.pdf`,
-    );
+    const nombrePdf = `${nombreComprobante}-${factura.letra_comprobante || "C"}-${String(
+      factura.punto_venta || 1,
+    ).padStart(4, "0")}-${String(
+      factura.numero_fiscal || factura.numero || 0,
+    ).padStart(8, "0")}.pdf`;
+
+    if (modo === "email") {
+      setEmailPendiente({
+        to: factura.clientes?.email,
+        filename: nombrePdf,
+        subject: `Factura ${factura.letra_comprobante || "C"} ${String(
+          factura.punto_venta || 1,
+        ).padStart(4, "0")}-${String(
+          factura.numero_fiscal || factura.numero || 0,
+        ).padStart(8, "0")}`,
+        html: `
+      <p>Hola ${factura.clientes?.nombre || ""},</p>
+      <p>Le enviamos adjunto el comprobante correspondiente.</p>
+      <p><strong>Total:</strong> $${Number(factura.total || 0).toLocaleString("es-AR")}</p>
+      <p>Muchas gracias.</p>
+      <p><strong>${empresaData?.razon_social || "Avance Fiscal"}</strong></p>
+    `,
+      });
+    } else {
+      setPdfNombre(nombrePdf);
+    }
   };
+  useEffect(() => {
+    if (!pdfData || !emailPendiente) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const pdf = await generarpdfU(
+          facturaPdfRef.current,
+          emailPendiente.filename,
+          { descargar: false },
+        );
+
+        const res = await fetch(`${API_URL}/api/email/factura`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            to: emailPendiente.to,
+            subject: emailPendiente.subject,
+            html: emailPendiente.html,
+            pdfBase64: pdf.pdfBase64,
+            filename: pdf.filename,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (!data.ok) {
+          alert(data.error || "No se pudo enviar el email");
+          return;
+        }
+
+        alert("Email enviado correctamente.");
+      } catch (error) {
+        console.log("Error enviando email:", error);
+        alert("Error enviando email.");
+      } finally {
+        setEmailPendiente(null);
+        setEnviandoEmail(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [pdfData, emailPendiente]);
 
   useEffect(() => {
     cargarFacturas();
@@ -454,7 +554,7 @@ export default function Facturas() {
     {
       field: "pdf",
       headerName: "Acciones",
-      width: 150,
+      width: 170,
       sortable: false,
       filterable: false,
       renderCell: (params) => (
@@ -483,6 +583,15 @@ export default function Facturas() {
               onClick={() => crearNotaCredito(params.row)}
             >
               <UndoIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Enviar por email">
+            <IconButton
+              color="primary"
+              disabled={enviandoEmail}
+              onClick={() => enviarFacturaEmail(params.row)}
+            >
+              <EmailIcon />
             </IconButton>
           </Tooltip>
         </>

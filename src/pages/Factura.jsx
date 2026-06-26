@@ -66,6 +66,37 @@ export default function Factura() {
   const drawerWidth = 200;
 
   useEffect(() => {
+    const cargarEmpresa = async () => {
+      try {
+        const usuario = JSON.parse(localStorage.getItem("usuario"));
+
+        if (!usuario?.id) return;
+
+        const { data, error } = await supabase
+          .from("usuario_empresa")
+          .select(
+            `
+            empresas(
+            *,
+             ciudades!empresas_idciudad_fkey(nombre)
+            )
+            `,
+          )
+          .eq("idusuario", usuario.id)
+          .single();
+
+        if (error) throw error;
+
+        setEmpresa(data.empresas);
+      } catch (error) {
+        console.log("Error cargando empresa en factura:", error);
+      }
+    };
+
+    cargarEmpresa();
+  }, []);
+
+  useEffect(() => {
     if (!generarPdfPendiente || !pdfData) return;
 
     const timer = setTimeout(() => {
@@ -93,21 +124,29 @@ export default function Factura() {
   }, [generarPdfPendiente, pdfData]);
 
   const obtenerLetraComprobante = (tipoComprobante, clienteSeleccionado) => {
-    if (empresa?.condicion_iva === "Monotributista") return "C";
+    if (!empresa) return "B";
+
+    const condicionEmpresa = empresa?.condicion_iva || empresa?.condicionIva;
+
+    if (condicionEmpresa === "Monotributista") {
+      return "C";
+    }
 
     if (tipoComprobante === "remito" || tipoComprobante === "presupuesto") {
       return "X";
     }
 
-    if (clienteSeleccionado?.condicion_iva === "Responsable Inscripto")
+    if (clienteSeleccionado?.condicion_iva === "Responsable Inscripto") {
       return "A";
+    }
 
     return "B";
   };
 
   useEffect(() => {
-    const letra = obtenerLetraComprobante();
-    setLetraComprobante(letra);
+    if (!empresa) return;
+
+    setLetraComprobante(obtenerLetraComprobante());
   }, [empresa, tipoComprobante, clienteSeleccionado]);
 
   const seleccionarArticulo = (articulo) => {
@@ -329,7 +368,7 @@ export default function Factura() {
         fecha,
         idcliente: clienteId,
         tipo_comprobante: tipoComprobante,
-        letra_comprobante: letraComprobante,
+        letra_comprobante: obtenerLetraComprobante(),
         forma_pago: formaPago,
         medio_pago: formaPago === "Contado" ? medioPago : null,
         observaciones: observaciones || "",
@@ -411,13 +450,19 @@ export default function Factura() {
 
       const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
+      const empresaPdf = respuestaFiscal.factura.empresas || empresa;
+
       const datosPdfFiscal = {
-        empresa: respuestaFiscal.factura.empresas,
+        empresa: {
+          ...empresaPdf,
+          localidad:
+            empresaPdf?.ciudades?.nombre || empresa?.ciudades?.nombre || "-",
+        },
         numeroFactura: respuestaFiscal.afip.numeroFiscal,
         fecha: respuestaFiscal.factura.fecha,
         tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
         letraComprobante:
-          respuestaFiscal.factura.empresas?.condicion_iva === "Monotributista"
+          empresaPdf?.condicion_iva === "Monotributista"
             ? "C"
             : respuestaFiscal.factura.letra_comprobante,
         formaPago: respuestaFiscal.factura.forma_pago,
@@ -937,6 +982,7 @@ export default function Factura() {
             <Button
               variant="contained"
               color="success"
+              disabled={guardando}
               startIcon={
                 guardando ? (
                   <CircularProgress size={18} color="inherit" />
