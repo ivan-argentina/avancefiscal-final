@@ -1,4 +1,8 @@
 import { useEffect, useState } from "react";
+import GraficoVentas from "../componentes/dashboard/GraficoVentas";
+import DashboardHeader from "../componentes/dashboard/DashboardHeader";
+import UltimasFacturas from "../componentes/dashboard/UltimasFacturas";
+import GraficoVentasDiarias from "../componentes/dashboard/GraficoVentasDiarias";
 import {
   Box,
   Card,
@@ -13,10 +17,17 @@ import {
 } from "@mui/material";
 import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import DashBoardCards from "../componentes/dashboard/DashboardCards";
+import TopClientes from "../componentes/dashboard/TopClientes";
+import StockBajo from "../componentes/dashboard/StockBajo";
+import AlertasDashboard from "../componentes/dashboard/AlertasDashboard";
+import KpiBar from "../componentes/dashboard/KpiBar";
 
 const API_URL = "https://gestion-production-e3f6.up.railway.app";
 
 export default function Dashboard() {
+  const [empresa, setEmpresa] = useState(null);
+  const [idEmpresa, setIdEmpresa] = useState(null);
   const [certificado, setCertificado] = useState(null);
   const [resumen, setResumen] = useState({
     ventasMes: 0,
@@ -39,6 +50,32 @@ export default function Dashboard() {
     setTipoImpresora(valor);
     localStorage.setItem("tipoImpresora", valor);
   };
+  const cargarEmpresa = async () => {
+    try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+      if (!usuarioGuardado?.id) return;
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      setIdEmpresa(idEmpresa);
+
+      const { data, error } = await supabase
+        .from("empresas")
+        .select("*")
+        .eq("id", idEmpresa)
+        .single();
+
+      if (error) {
+        console.log("Error cargando empresa:", error);
+        return;
+      }
+
+      setEmpresa(data);
+    } catch (error) {
+      console.error(error);
+    }
+  };
 
   const cargarResumen = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
@@ -53,6 +90,33 @@ export default function Dashboard() {
       .toISOString()
       .slice(0, 10);
 
+    const { count: cantidadClientes } = await supabase
+      .from("clientes")
+      .select("*", { count: "exact", head: true })
+      .eq("idempresa", idEmpresa);
+
+    const { count: cantidadArticulos } = await supabase
+      .from("articulos")
+      .select("*", { count: "exact", head: true })
+      .eq("idempresa", idEmpresa);
+
+    const { count: facturasPendientes } = await supabase
+      .from("facturas")
+      .select("*", { count: "exact", head: true })
+      .eq("idempresa", idEmpresa)
+      .eq("estado_fiscal", "pendiente");
+
+    const { count: stockBajo } = await supabase
+      .from("articulos")
+      .select("*", { count: "exact", head: true })
+      .eq("idempresa", idEmpresa)
+      .filter("stock", "lte", "stock_minimo");
+
+    const { count: stockNegativo } = await supabase
+      .from("articulos")
+      .select("*", { count: "exact", head: true })
+      .eq("idempresa", idEmpresa)
+      .lt("stock", 0);
     const { data, error } = await supabase
       .from("facturas")
       .select("total, saldo, estado_fiscal, fecha")
@@ -65,13 +129,18 @@ export default function Dashboard() {
       return;
     }
 
-    const ventasMes = (data || [])
+    const facturas = data || [];
+
+    const ventasMes = facturas
       .filter((f) => f.estado_fiscal === "autorizada")
       .reduce((acc, f) => acc + Number(f.total || 0), 0);
 
-    const comprobantesMes = (data || []).filter(
+    const comprobantesMes = facturas.filter(
       (f) => f.estado_fiscal === "autorizada",
     ).length;
+
+    const ticketPromedio =
+      comprobantesMes > 0 ? ventasMes / comprobantesMes : 0;
 
     const { data: pendientes } = await supabase
       .from("facturas")
@@ -88,6 +157,12 @@ export default function Dashboard() {
       ventasMes,
       saldoCobrar,
       comprobantesMes,
+      ticketPromedio,
+      cantidadClientes,
+      cantidadArticulos,
+      facturasPendientes,
+      stockBajo,
+      stockNegativo,
     });
   };
   const cargarMonotributo = async () => {
@@ -206,6 +281,7 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    cargarEmpresa();
     cargarEstadoCertificado();
     cargarResumen();
     cargarMonotributo();
@@ -230,160 +306,32 @@ export default function Dashboard() {
   const config = configCertificado[estadoCert];
 
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
-        Dashboard
-      </Typography>
+    <Box sx={{ p: 2, overflowY: "auto", height: "calc(100vh - 64px)" }}>
+      <DashboardHeader empresa={empresa} />
+      <KpiBar resumen={resumen} />
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Ventas del mes
-              </Typography>
-              <Typography variant="h5" fontWeight="bold">
-                {resumen.ventasMes.toLocaleString("es-AR", {
-                  style: "currency",
-                  currency: "ARS",
-                })}
-              </Typography>
-            </CardContent>
-          </Card>
+      <Grid container spacing={3} sx={{ mt: 3 }}>
+        <Grid size={{ xs: 12, lg: 8 }}>
+          <TopClientes idEmpresa={idEmpresa} />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Saldo a cobrar
-              </Typography>
-              <Typography variant="h5" fontWeight="bold">
-                {resumen.saldoCobrar.toLocaleString("es-AR", {
-                  style: "currency",
-                  currency: "ARS",
-                })}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid size={{ xs: 12, lg: 4 }}>
+          <StockBajo idEmpresa={idEmpresa} />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3} sx={{ mt: 3 }}>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <UltimasFacturas idEmpresa={idEmpresa} />
         </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Comprobantes del mes
-              </Typography>
-              <Typography variant="h5" fontWeight="bold">
-                {resumen.comprobantesMes}
-              </Typography>
-            </CardContent>
-          </Card>
+        <Grid size={{ xs: 12, lg: 6 }}>
+          <AlertasDashboard certificado={certificado} resumen={resumen} />
         </Grid>
-
-        <Grid size={{ xs: 12, md: 3 }}>
-          <Card>
-            <CardContent>
-              <Typography variant="subtitle2" color="text.secondary">
-                Estado AFIP
-              </Typography>
-
-              <Box sx={{ mt: 1, mb: 1 }}>
-                <Chip
-                  label={config.label}
-                  color={config.color}
-                  size="small"
-                  sx={{ fontWeight: 600 }}
-                />
-              </Box>
-
-              <Typography variant="body2">
-                Vence:{" "}
-                {certificado?.vence
-                  ? new Date(certificado.vence).toLocaleDateString("es-AR")
-                  : "-"}
-              </Typography>
-
-              <Typography variant="body2">
-                Días restantes: {certificado?.diasRestantes ?? "-"}
-              </Typography>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {monotributo.condicionIva === "Monotributista" && (
-          <Grid size={{ xs: 12, md: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Control Monotributo
-                </Typography>
-
-                <Typography variant="h6" fontWeight="bold">
-                  Categoría {monotributo.categoria || "-"}
-                </Typography>
-
-                <Box sx={{ mt: 1, mb: 1 }}>
-                  <LinearProgress
-                    variant="determinate"
-                    value={Math.min(monotributo.porcentaje, 100)}
-                    color={
-                      monotributo.porcentaje >= 90
-                        ? "error"
-                        : monotributo.porcentaje >= 70
-                          ? "warning"
-                          : "success"
-                    }
-                    sx={{ height: 10, borderRadius: 5 }}
-                  />
-                </Box>
-
-                <Typography variant="body2">
-                  Usado: {monotributo.porcentaje.toFixed(2)}%
-                </Typography>
-
-                <Typography variant="body2">
-                  Facturado 12 meses:{" "}
-                  {monotributo.facturado12Meses.toLocaleString("es-AR", {
-                    style: "currency",
-                    currency: "ARS",
-                  })}
-                </Typography>
-
-                <Typography variant="body2">
-                  Límite:{" "}
-                  {monotributo.limite.toLocaleString("es-AR", {
-                    style: "currency",
-                    currency: "ARS",
-                  })}
-                </Typography>
-
-                <Typography variant="body2">
-                  Disponible:{" "}
-                  {monotributo.disponible.toLocaleString("es-AR", {
-                    style: "currency",
-                    currency: "ARS",
-                  })}
-                </Typography>
-              </CardContent>
-            </Card>
+        <Grid container spacing={3} sx={{ mt: 3 }}>
+          <Grid size={{ xs: 12 }}>
+            <GraficoVentasDiarias idEmpresa={idEmpresa} />
           </Grid>
-        )}
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField
-            select
-            label="Tipo de impresora"
-            size="small"
-            value={tipoImpresora}
-            onChange={(e) => {
-              setTipoImpresora(e.target.value);
-              localStorage.setItem("tipoImpresora", e.target.value);
-            }}
-            sx={{ minWidth: 220 }}
-          >
-            <MenuItem value="comandera">Comandera</MenuItem>
-            <MenuItem value="laser">Láser</MenuItem>
-          </TextField>
         </Grid>
       </Grid>
     </Box>

@@ -28,6 +28,8 @@ import { useNavigate } from "react-router-dom";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import AbmEmpresas from "./AbmEmpresas";
 import AbmUsuarios from "./AbmUsuarios";
+import ImportarDatos from "./ImportarDatos";
+import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
 import { supabase } from "../hook/supabaseClient";
 
@@ -507,6 +509,7 @@ export default function InicioFactu() {
             </List>
           </Collapse>
         </List>
+
         <Box
           sx={{
             mt: "auto",
@@ -514,6 +517,25 @@ export default function InicioFactu() {
             borderTop: "1px solid rgba(255,255,255,0.15)",
           }}
         >
+          <ListItemButton
+            component={Link}
+            to="/importar-datos"
+            selected={location.pathname === "/importar-datos"}
+            sx={{
+              color: "white",
+              mb: 1,
+
+              "&:hover": {
+                backgroundColor: "#1565C0",
+              },
+
+              "&.Mui-selected": {
+                backgroundColor: "#0D47A1",
+              },
+            }}
+          >
+            <ListItemText primary="Importar Datos" />
+          </ListItemButton>
           <ListItemButton
             onClick={cerrarSesion}
             sx={{
@@ -561,6 +583,7 @@ export default function InicioFactu() {
             <Route path="/empresas" element={<AbmEmpresas />} />
             <Route path="/usuarios" element={<AbmUsuarios />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/importar-datos" element={<ImportarDatos />} />
           </Routes>
         </Box>
       </Box>
