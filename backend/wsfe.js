@@ -3,6 +3,38 @@ import { obtenerTokenSign } from "./wsaa.js";
 
 const WSFE_URL = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL";
 
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const ejecutarConReintento = async (fn, intentos = 3, esperaMs = 1500) => {
+  let ultimoError;
+
+  for (let i = 1; i <= intentos; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      ultimoError = error;
+
+      const codigo = error?.code || error?.cause?.code;
+      const mensaje = error?.message || "";
+
+      const esErrorConexion =
+        codigo === "ECONNRESET" ||
+        codigo === "ETIMEDOUT" ||
+        codigo === "ECONNREFUSED" ||
+        mensaje.includes("ECONNRESET");
+
+      if (!esErrorConexion || i === intentos) {
+        throw error;
+      }
+
+      console.log(`AFIP sin respuesta. Reintento ${i + 1}/${intentos}...`);
+      await esperar(esperaMs);
+    }
+  }
+
+  throw ultimoError;
+};
+
 export const obtenerUltimoComprobante = async ({
   cuit,
   puntoVenta,
@@ -11,15 +43,17 @@ export const obtenerUltimoComprobante = async ({
   const auth = await obtenerTokenSign(cuit);
   const client = await soap.createClientAsync(WSFE_URL);
 
-  const [result] = await client.FECompUltimoAutorizadoAsync({
-    Auth: {
-      Token: auth.token,
-      Sign: auth.sign,
-      Cuit: Number(cuit),
-    },
-    PtoVta: Number(puntoVenta),
-    CbteTipo: Number(tipoComprobante),
-  });
+  const [result] = await ejecutarConReintento(() =>
+    client.FECompUltimoAutorizadoAsync({
+      Auth: {
+        Token: auth.token,
+        Sign: auth.sign,
+        Cuit: Number(cuit),
+      },
+      PtoVta: Number(puntoVenta),
+      CbteTipo: Number(tipoComprobante),
+    }),
+  );
 
   return result.FECompUltimoAutorizadoResult;
 };
@@ -48,14 +82,9 @@ export const autorizarFactura = async ({
   } else {
     tipoComprobanteAfip = tipoComprobante === "nota_de_credito" ? 13 : 11;
   }
+
   const condicionIVAReceptorIdFinal =
     letraComprobante === "A" ? 1 : Number(condicionIVAReceptorId);
-
-  console.log("TIPO AFIP:", {
-    tipoComprobante,
-    letraComprobante,
-    tipoComprobanteAfip,
-  });
 
   if (
     tipoComprobante === "nota_de_credito" &&
@@ -76,10 +105,6 @@ export const autorizarFactura = async ({
   });
 
   const proximoNumero = Number(ultimo.CbteNro || 0) + 1;
-  console.log("ULTIMO AFIP COMPLETO:", JSON.stringify(ultimo, null, 2));
-  console.log("ULTIMO CBTE NRO:", ultimo?.CbteNro);
-  console.log("PROXIMO NUMERO CALCULADO:", proximoNumero);
-
   const fecha = new Date().toISOString().slice(0, 10).replaceAll("-", "");
 
   const datosAsociados =
@@ -94,6 +119,7 @@ export const autorizarFactura = async ({
           },
         }
       : {};
+
   const esFacturaConIva = letraComprobante === "A" || letraComprobante === "B";
 
   const netoFinal = esFacturaConIva
@@ -115,70 +141,52 @@ export const autorizarFactura = async ({
         },
       }
     : {};
-  console.log(
-    "Enviando a AFIP:",
-    JSON.stringify(
-      {
-        tipoComprobanteAfip,
-        total,
-        neto,
-        iva,
-        docTipo,
-        docNro,
-        proximoNumero,
-        datosIva,
-        datosAsociados,
-      },
-      null,
-      2,
-    ),
-  );
 
   console.log("ENVIANDO COMPROBANTE:", {
     CbteTipo: tipoComprobanteAfip,
     PtoVta: Number(puntoVenta),
-    CbteDesde: Number(proximoNumero),
-    CbteHasta: Number(proximoNumero),
+    CbteDesde: proximoNumero,
+    CbteHasta: proximoNumero,
   });
-  const [result] = await client.FECAESolicitarAsync({
-    Auth: {
-      Token: auth.token,
-      Sign: auth.sign,
-      Cuit: Number(cuit),
-    },
 
-    FeCAEReq: {
-      FeCabReq: {
-        CantReg: 1,
-        PtoVta: Number(puntoVenta),
-        CbteTipo: tipoComprobanteAfip,
+  const [result] = await ejecutarConReintento(() =>
+    client.FECAESolicitarAsync({
+      Auth: {
+        Token: auth.token,
+        Sign: auth.sign,
+        Cuit: Number(cuit),
       },
-
-      FeDetReq: {
-        FECAEDetRequest: {
-          Concepto: 1,
-          DocTipo: Number(docTipo || 99),
-          DocNro: Number(docNro || 0),
-          CbteDesde: proximoNumero,
-          CbteHasta: proximoNumero,
-          CbteFch: fecha,
-          ImpTotal: Number(total),
-          ImpTotConc: 0,
-          ImpNeto: netoFinal,
-          ImpOpEx: 0,
-          ImpTrib: 0,
-          ImpIVA: ivaFinal,
-          MonId: "PES",
-          MonCotiz: 1,
-          CondicionIVAReceptorId: condicionIVAReceptorIdFinal,
-          ...datosIva,
-          ...datosAsociados,
+      FeCAEReq: {
+        FeCabReq: {
+          CantReg: 1,
+          PtoVta: Number(puntoVenta),
+          CbteTipo: tipoComprobanteAfip,
+        },
+        FeDetReq: {
+          FECAEDetRequest: {
+            Concepto: 1,
+            DocTipo: Number(docTipo || 99),
+            DocNro: Number(docNro || 0),
+            CbteDesde: proximoNumero,
+            CbteHasta: proximoNumero,
+            CbteFch: fecha,
+            ImpTotal: Number(total),
+            ImpTotConc: 0,
+            ImpNeto: netoFinal,
+            ImpOpEx: 0,
+            ImpTrib: 0,
+            ImpIVA: ivaFinal,
+            MonId: "PES",
+            MonCotiz: 1,
+            CondicionIVAReceptorId: condicionIVAReceptorIdFinal,
+            ...datosIva,
+            ...datosAsociados,
+          },
         },
       },
-    },
-  });
+    }),
+  );
 
   console.log("RESPUESTA AFIP:", JSON.stringify(result, null, 2));
-  console.log("CONDICION IVA RECEPTOR FINAL:", condicionIVAReceptorIdFinal);
   return result.FECAESolicitarResult;
 };
