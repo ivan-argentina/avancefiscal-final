@@ -1,5 +1,10 @@
+import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import { importarClientes } from "../utils/importador/importarClientes";
 import { importarCiudades } from "../utils/importador/importarCiudades";
-import { supabase } from "../hook/supabaseClient";
+import DialogDetalleImportacion from "../componentes/importador/DialogDetalleImportacion";
+import TarjetaResumenImportacion from "../componentes/importador/TarjetaResumenImportacion";
+import { importarFamilias } from "../utils/importador/importarFamilias";
+import { importarArticulos } from "../utils/importador/importarArticulos";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import {
@@ -11,6 +16,12 @@ import {
   Stack,
   Chip,
   Alert,
+  Grid,
+  LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 
@@ -25,35 +36,128 @@ export default function ImportarDatos() {
   const [progreso, setProgreso] = useState(0);
   const [mensaje, setMensaje] = useState("");
   const [logImportacion, setLogImportacion] = useState([]);
+  const [openLog, setOpenLog] = useState(false);
+  const [previewArticulos, setPreviewArticulos] = useState([]);
 
-  const agregarLog = (texto) => {
-    setLogImportacion((prev) => [...prev, texto]);
-  };
   const iniciarImportacion = async () => {
     try {
       setImportando(true);
-      setMensaje("");
+      setResultado(null);
+      setProgreso(0);
+      setLogImportacion([]);
+      setMensaje("Importando ciudades...");
 
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      const hayArticulos = workbook.Sheets["Articulos"];
+      const hayFamilias = workbook.Sheets["Familias"];
+
+      if (hayArticulos && hayFamilias) {
+        setMensaje("Importando familias...");
+
+        const familias = XLSX.utils.sheet_to_json(workbook.Sheets["Familias"]);
+
+        const resultadoFamilias = await importarFamilias(
+          familias,
+          idEmpresa,
+          (avance) => {
+            setProgreso(avance.porcentaje);
+            setMensaje(
+              `Importando familias... ${avance.actual} de ${avance.total}`,
+            );
+          },
+        );
+
+        const mapaFamilias = resultadoFamilias.mapaFamilias;
+
+        setMensaje("Importando artículos...");
+
+        const articulos = XLSX.utils.sheet_to_json(
+          workbook.Sheets["Articulos"],
+        );
+
+        const resultadoArticulos = await importarArticulos(
+          articulos,
+          mapaFamilias,
+          idEmpresa,
+          (avance) => {
+            setProgreso(avance.porcentaje);
+            setMensaje(
+              `Importando artículos... ${avance.actual} de ${avance.total}`,
+            );
+          },
+        );
+
+        setResultado(resultadoArticulos);
+
+        setLogImportacion([
+          { tipo: "titulo", mensaje: "FAMILIAS" },
+          ...(resultadoFamilias.log || []),
+          { tipo: "titulo", mensaje: "ARTÍCULOS" },
+          ...(resultadoArticulos.log || []),
+        ]);
+
+        setProgreso(100);
+        setMensaje("✅ Importación finalizada correctamente.");
+        return;
+      }
       const ciudades = XLSX.utils.sheet_to_json(workbook.Sheets["Ciudad"]);
 
-      const mapaCiudades = await importarCiudades(ciudades, empresa.id);
+      const resultadoCiudades = await importarCiudades(
+        ciudades,
+        idEmpresa,
+        (avance) => {
+          setProgreso(avance.porcentaje);
+          setMensaje(
+            `Importando ciudades... ${avance.actual} de ${avance.total}`,
+          );
+        },
+      );
 
-      console.log("MAPA CIUDADES:", mapaCiudades);
+      const mapaCiudades = resultadoCiudades.mapaCiudades;
 
-      setMensaje("Ciudades importadas correctamente.");
+      setMensaje("Importando clientes...");
+
+      const clientes = XLSX.utils.sheet_to_json(workbook.Sheets["Clientes"]);
+
+      const resultadoClientes = await importarClientes(
+        clientes,
+        mapaCiudades,
+        idEmpresa,
+        (avance) => {
+          // console.log("AVANCE:", avance);
+
+          setProgreso(() => avance.porcentaje);
+
+          setMensaje(
+            `Importando clientes... ${avance.actual} de ${avance.total}`,
+          );
+        },
+      );
+
+      setResultado(resultadoClientes);
+      setLogImportacion([
+        {
+          tipo: "titulo",
+          mensaje: "CIUDADES",
+        },
+        ...(resultadoCiudades.log || []),
+        {
+          tipo: "titulo",
+          mensaje: "CLIENTES",
+        },
+        ...(resultadoClientes.log || []),
+      ]);
+      setProgreso(100);
+
+      setMensaje("✅ Importación finalizada correctamente.");
     } catch (error) {
       console.error(error);
-      setMensaje(error.message);
+      setMensaje(`❌ Error: ${error.message}`);
     } finally {
       setImportando(false);
     }
-  };
-  const importar = async () => {
-    const ciudades = XLSX.utils.sheet_to_json(workbook.Sheets["Ciudad"]);
-
-    const resultado = await importarCiudades(ciudades);
-
-    console.log(resultado);
   };
 
   const leerArchivo = async (e) => {
@@ -77,14 +181,14 @@ export default function ImportarDatos() {
           ...c,
         })),
       );
-      console.log(ciudades[0]);
+      // console.log(ciudades[0]);
     }
 
     // Vista previa Clientes
     if (wb.Sheets["Clientes"]) {
       const clientes = XLSX.utils.sheet_to_json(wb.Sheets["Clientes"]);
 
-      console.log("CLIENTES EXCEL:", clientes[0]);
+      //  console.log("CLIENTES EXCEL:", clientes[0]);
 
       setPreviewClientes(
         clientes.slice(0, 10).map((c, index) => ({
@@ -93,79 +197,94 @@ export default function ImportarDatos() {
         })),
       );
     }
+    console.log("HOJAS:", wb.SheetNames);
+
+    wb.SheetNames.forEach((nombreHoja) => {
+      const datos = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja]);
+      console.log("HOJA:", nombreHoja);
+      console.log("PRIMERA FILA:", datos[0]);
+      console.log("COLUMNAS:", Object.keys(datos[0] || {}));
+    });
+
+    // Vista previa Artículos
+    const hojaArticulos =
+      wb.Sheets["Articulos"] ||
+      wb.Sheets["Artículos"] ||
+      wb.Sheets["Articulo"] ||
+      wb.Sheets["Artículo"] ||
+      wb.Sheets["Productos"];
+
+    if (hojaArticulos) {
+      const articulos = XLSX.utils.sheet_to_json(hojaArticulos);
+
+      console.log("ARTICULOS EXCEL:", articulos[0]);
+      console.log("COLUMNAS ARTICULOS:", Object.keys(articulos[0] || {}));
+
+      setPreviewArticulos(
+        articulos.slice(0, 10).map((a, index) => ({
+          id: index + 1,
+          ...a,
+        })),
+      );
+    }
   };
 
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" fontWeight="bold" sx={{ mb: 2 }}>
-        Importar datos
+        Asistente de Importación
       </Typography>
 
-      <Card sx={{ borderRadius: 3 }}>
-        <CardContent>
-          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
-            Seleccionar archivo Excel
-          </Typography>
-          <Alert severity="info" sx={{ mb: 3 }}>
-            Este asistente importará automáticamente la información desde un
-            archivo Excel.
-          </Alert>
+      <Grid container spacing={3}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Card sx={{ borderRadius: 3 }}>
+            <CardContent>
+              <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
+                Archivo Excel
+              </Typography>
 
-          <Button variant="contained" component="label">
-            Seleccionar Excel
-            <input
-              hidden
-              type="file"
-              accept=".xls,.xlsx"
-              onChange={leerArchivo}
-            />
-          </Button>
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Este asistente importará automáticamente ciudades y clientes
+                desde el archivo Excel.
+              </Alert>
 
-          {archivo && (
-            <Typography sx={{ mt: 2 }}>
-              Archivo: <strong>{archivo.name}</strong>
-            </Typography>
-          )}
+              <Button variant="contained" component="label">
+                Seleccionar Excel
+                <input
+                  hidden
+                  type="file"
+                  accept=".xls,.xlsx"
+                  onChange={leerArchivo}
+                />
+              </Button>
 
-          {hojas.length > 0 && (
-            <>
-              <Box sx={{ mt: 3 }}>
-                <Typography fontWeight="bold" sx={{ mb: 1 }}>
-                  Hojas encontradas
+              {archivo && (
+                <Typography sx={{ mt: 2 }}>
+                  Archivo: <strong>{archivo.name}</strong>
                 </Typography>
+              )}
 
-                <Stack direction="row" spacing={1}>
-                  {hojas.map((hoja) => (
-                    <Chip key={hoja} label={hoja} color="primary" />
-                  ))}
-                </Stack>
-              </Box>
-
-              {previewCiudades.length > 0 && (
-                <>
-                  <Typography variant="h6" sx={{ mt: 4, mb: 1 }}>
-                    Vista previa - Ciudades
+              {hojas.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography fontWeight="bold" sx={{ mb: 1 }}>
+                    Hojas encontradas
                   </Typography>
 
-                  <Box sx={{ height: 250 }}>
-                    <DataGrid
-                      rows={previewCiudades}
-                      columns={[
-                        { field: "Id", headerName: "ID", width: 90 },
-                        { field: "Ciudad", headerName: "Ciudad", flex: 1 },
-                      ]}
-                      hideFooter
-                    />
-                  </Box>
-                </>
+                  <Stack direction="row" spacing={1}>
+                    {hojas.map((hoja) => (
+                      <Chip key={hoja} label={hoja} color="primary" />
+                    ))}
+                  </Stack>
+                </Box>
               )}
+
               {previewClientes.length > 0 && (
                 <>
                   <Typography variant="h6" sx={{ mt: 4, mb: 1 }}>
                     Vista previa - Clientes
                   </Typography>
 
-                  <Box sx={{ height: 300 }}>
+                  <Box sx={{ height: 330 }}>
                     <DataGrid
                       rows={previewClientes}
                       columns={[
@@ -191,31 +310,136 @@ export default function ImportarDatos() {
                   </Box>
                 </>
               )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-      <Button
-        variant="contained"
-        color="success"
-        size="large"
-        fullWidth
-        disabled={importando}
-        onClick={iniciarImportacion}
-        sx={{
-          mt: 4,
-          height: 55,
-          borderRadius: 3,
-          fontWeight: "bold",
-        }}
-      >
-        {importando ? "Importando..." : "Importar Datos"}
-      </Button>
-      {mensaje && (
-        <Alert severity="success" sx={{ mt: 2 }}>
-          {mensaje}
-        </Alert>
-      )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Card sx={{ borderRadius: 3, height: "100%" }}>
+            <CardContent>
+              <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>
+                Resumen
+              </Typography>
+
+              <Typography variant="body2">
+                Archivo: <strong>{archivo?.name || "-"}</strong>
+              </Typography>
+
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Hojas: <strong>{hojas.length}</strong>
+              </Typography>
+
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Ciudades detectadas: <strong>{previewCiudades.length}</strong>
+              </Typography>
+
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Clientes detectados: <strong>{previewClientes.length}</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Artículos detectados: <strong>{previewArticulos.length}</strong>
+              </Typography>
+
+              <Box sx={{ mt: 3 }}>
+                <Typography fontWeight="bold" sx={{ mb: 1 }}>
+                  Progreso
+                </Typography>
+
+                <Typography variant="body2" color="text.secondary">
+                  {mensaje || "Esperando archivo para importar..."}
+                </Typography>
+              </Box>
+              {(importando || progreso > 0) && (
+                <Box sx={{ mt: 2 }}>
+                  <LinearProgress
+                    variant="determinate"
+                    value={Number(progreso) || 0}
+                  />
+
+                  <Typography variant="body2" sx={{ mt: 1 }}>
+                    {Number(progreso) || 0}%
+                  </Typography>
+                </Box>
+              )}
+
+              {resultado && (
+                <Grid container spacing={1.5} sx={{ mt: 2 }}>
+                  <Grid size={{ xs: 6 }}>
+                    <TarjetaResumenImportacion
+                      titulo="Leídos"
+                      valor={resultado.leidos}
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 6 }}>
+                    <TarjetaResumenImportacion
+                      titulo="Importados"
+                      valor={resultado.importados}
+                      color="success.main"
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 6 }}>
+                    <TarjetaResumenImportacion
+                      titulo="Duplicados"
+                      valor={resultado.salteados}
+                      color="warning.main"
+                    />
+                  </Grid>
+
+                  <Grid size={{ xs: 6 }}>
+                    <TarjetaResumenImportacion
+                      titulo="Errores"
+                      valor={resultado.errores}
+                      color="error.main"
+                    />
+                  </Grid>
+                </Grid>
+              )}
+              {logImportacion.length > 0 && (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  sx={{ mt: 2 }}
+                  onClick={() => setOpenLog(true)}
+                >
+                  📋 Ver detalle de importación
+                </Button>
+              )}
+              {mensaje && (
+                <Alert severity="success" sx={{ mt: 2 }}>
+                  {mensaje}
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+
+        <Grid size={{ xs: 12 }}>
+          <Button
+            variant="contained"
+            color="success"
+            size="large"
+            fullWidth
+            disabled={importando || !workbook}
+            onClick={iniciarImportacion}
+            sx={{
+              height: 55,
+              borderRadius: 3,
+              fontWeight: "bold",
+              fontSize: 17,
+            }}
+          >
+            {importando ? "Importando..." : "🚀 Iniciar Importación"}
+          </Button>
+        </Grid>
+      </Grid>
+
+      <DialogDetalleImportacion
+        open={openLog}
+        onClose={() => setOpenLog(false)}
+        log={logImportacion}
+      />
     </Box>
   );
 }

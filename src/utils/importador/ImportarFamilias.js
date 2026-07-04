@@ -1,70 +1,72 @@
 import { supabase } from "../../hook/supabaseClient";
 
-export async function importarCiudades(ciudadesExcel, idEmpresa, onProgress) {
-  const mapaCiudades = {};
+export async function importarFamilias(familiasExcel, idEmpresa, onProgress) {
+  const mapaFamilias = {};
   const log = [];
-  const total = ciudadesExcel.length;
 
-  let creadas = 0;
-  let existentes = 0;
+  let importados = 0;
+  let salteados = 0;
   let errores = 0;
 
-  for (let i = 0; i < ciudadesExcel.length; i++) {
-    const ciudadExcel = ciudadesExcel[i];
+  const total = familiasExcel.length;
+
+  for (let i = 0; i < familiasExcel.length; i++) {
+    const familiaExcel = familiasExcel[i];
 
     try {
-      if (!ciudadExcel.Ciudad) {
+      const idExcel = familiaExcel.Id;
+      const nombre = String(familiaExcel.familia || "").trim();
+
+      if (!nombre) {
         errores++;
         log.push({
           tipo: "error",
-          mensaje: `Fila ${i + 1}: ciudad sin nombre`,
+          mensaje: `Fila ${i + 1}: familia sin nombre`,
         });
         continue;
       }
 
-      const nombre = String(ciudadExcel.Ciudad).trim();
-
       const { data: existente, error: errorBuscar } = await supabase
-        .from("ciudades")
-        .select("id, nombre")
+        .from("familias")
+        .select("id")
         .eq("idempresa", idEmpresa)
         .eq("nombre", nombre)
         .maybeSingle();
 
       if (errorBuscar) throw errorBuscar;
 
-      let idCiudad;
+      let idFamilia;
 
       if (existente) {
-        idCiudad = existente.id;
-        existentes++;
+        idFamilia = existente.id;
+        salteados++;
 
         log.push({
           tipo: "duplicado",
-          mensaje: `Ciudad existente: ${nombre}`,
+          mensaje: `Familia existente: ${nombre}`,
         });
       } else {
-        const { data: nuevaCiudad, error } = await supabase
-          .from("ciudades")
+        const { data: nuevaFamilia, error } = await supabase
+          .from("familias")
           .insert({
             nombre,
             idempresa: idEmpresa,
           })
-          .select("id, nombre")
+          .select("id")
           .single();
 
         if (error) throw error;
 
-        idCiudad = nuevaCiudad.id;
-        creadas++;
+        idFamilia = nuevaFamilia.id;
+        importados++;
 
         log.push({
           tipo: "ok",
-          mensaje: `Ciudad creada: ${nombre}`,
+          mensaje: `Familia creada: ${nombre}`,
         });
       }
 
-      mapaCiudades[ciudadExcel.Id] = idCiudad;
+      mapaFamilias[idExcel] = idFamilia;
     } catch (error) {
       errores++;
 
@@ -79,7 +81,7 @@ export async function importarCiudades(ciudadesExcel, idEmpresa, onProgress) {
         actual: i + 1,
         total,
         porcentaje: Math.round(((i + 1) / total) * 100),
-        ciudad: ciudadExcel.Ciudad,
+        familia: familiaExcel.familia,
       });
 
       await new Promise((resolve) => setTimeout(resolve, 20));
@@ -87,13 +89,11 @@ export async function importarCiudades(ciudadesExcel, idEmpresa, onProgress) {
   }
 
   return {
-    mapaCiudades,
-    resumen: {
-      leidos: total,
-      creadas,
-      existentes,
-      errores,
-    },
+    mapaFamilias,
+    leidos: total,
+    importados,
+    salteados,
+    errores,
     log,
   };
 }
