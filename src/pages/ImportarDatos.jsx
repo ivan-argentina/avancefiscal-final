@@ -40,6 +40,7 @@ export default function ImportarDatos() {
   const [previewArticulos, setPreviewArticulos] = useState([]);
 
   const iniciarImportacion = async () => {
+    const inicio = performance.now();
     try {
       setImportando(true);
       setResultado(null);
@@ -62,7 +63,7 @@ export default function ImportarDatos() {
           familias,
           idEmpresa,
           (avance) => {
-            setProgreso(avance.porcentaje);
+            setProgreso(Math.round(avance.porcentaje * 0.2));
             setMensaje(
               `Importando familias... ${avance.actual} de ${avance.total}`,
             );
@@ -76,20 +77,28 @@ export default function ImportarDatos() {
         const articulos = XLSX.utils.sheet_to_json(
           workbook.Sheets["Articulos"],
         );
+        console.log("ARTICULOS A IMPORTAR:", articulos.length);
 
         const resultadoArticulos = await importarArticulos(
           articulos,
           mapaFamilias,
           idEmpresa,
           (avance) => {
-            setProgreso(avance.porcentaje);
+            console.log("AVANCE ARTICULOS:", avance);
+            setProgreso(20 + Math.round(avance.porcentaje * 0.8));
             setMensaje(
               `Importando artículos... ${avance.actual} de ${avance.total}`,
             );
           },
         );
 
-        setResultado(resultadoArticulos);
+        const fin = performance.now();
+        const segundos = ((fin - inicio) / 1000).toFixed(2);
+
+        setResultado({
+          ...resultadoArticulos,
+          tiempo: segundos,
+        });
 
         setLogImportacion([
           { tipo: "titulo", mensaje: "FAMILIAS" },
@@ -99,9 +108,10 @@ export default function ImportarDatos() {
         ]);
 
         setProgreso(100);
-        setMensaje("✅ Importación finalizada correctamente.");
+        setMensaje(`✅ Importación finalizada en ${segundos} segundos.`);
         return;
       }
+
       const ciudades = XLSX.utils.sheet_to_json(workbook.Sheets["Ciudad"]);
 
       const resultadoCiudades = await importarCiudades(
@@ -135,8 +145,12 @@ export default function ImportarDatos() {
           );
         },
       );
-
-      setResultado(resultadoClientes);
+      const fin = performance.now();
+      const segundos = ((fin - inicio) / 1000).toFixed(2);
+      setResultado({
+        ...resultadoClientes,
+        tiempo: segundos,
+      });
       setLogImportacion([
         {
           tipo: "titulo",
@@ -310,6 +324,34 @@ export default function ImportarDatos() {
                   </Box>
                 </>
               )}
+              {previewArticulos.length > 0 && (
+                <>
+                  <Typography variant="h6" sx={{ mt: 4, mb: 1 }}>
+                    Vista previa - Artículos
+                  </Typography>
+
+                  <Box sx={{ height: 330 }}>
+                    <DataGrid
+                      rows={previewArticulos}
+                      columns={[
+                        { field: "Barra", headerName: "Código", width: 120 },
+                        { field: "Articulo", headerName: "Artículo", flex: 1 },
+                        { field: "IdFm", headerName: "ID Familia", width: 110 },
+                        { field: "Pcosto", headerName: "Costo", width: 110 },
+                        {
+                          field: "Pfinal",
+                          headerName: "Precio Final",
+                          width: 120,
+                        },
+                        { field: "stock", headerName: "Stock", width: 100 },
+                        { field: "Smin", headerName: "Stock mín.", width: 110 },
+                        { field: "Unidad", headerName: "Unidad", width: 110 },
+                      ]}
+                      hideFooter
+                    />
+                  </Box>
+                </>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -394,6 +436,16 @@ export default function ImportarDatos() {
                       color="error.main"
                     />
                   </Grid>
+                  {resultado?.tiempo && (
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      align="center"
+                      sx={{ mt: 2 }}
+                    >
+                      ⏱️ Tiempo de importación: {resultado.tiempo} segundos
+                    </Typography>
+                  )}
                 </Grid>
               )}
               {logImportacion.length > 0 && (
@@ -439,6 +491,8 @@ export default function ImportarDatos() {
         open={openLog}
         onClose={() => setOpenLog(false)}
         log={logImportacion}
+        resultado={resultado}
+        archivo={archivo?.name}
       />
     </Box>
   );

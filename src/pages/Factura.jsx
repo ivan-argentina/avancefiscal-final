@@ -638,6 +638,16 @@ export default function Factura() {
       ),
     },
   ];
+  const elegirArticulo = (articulo) => {
+    if (!articulo) return;
+
+    seleccionarArticulo(articulo);
+
+    setTimeout(() => {
+      cantidadRef.current?.focus();
+      cantidadRef.current?.select();
+    }, 100);
+  };
 
   return (
     <Box
@@ -799,15 +809,13 @@ export default function Factura() {
                   setInputArticulo(newInputValue);
                 }}
                 onChange={(event, newValue) => {
-                  if (newValue) {
-                    seleccionarArticulo(newValue);
-                    setTimeout(() => {
-                      cantidadRef.current?.focus();
-                      cantidadRef.current?.select();
-                    }, 100);
-                  }
+                  elegirArticulo(newValue);
                 }}
-                getOptionLabel={(option) => option?.descripcion || ""}
+                getOptionLabel={(option) =>
+                  option
+                    ? `${option.codigo || ""} - ${option.descripcion || ""}`
+                    : ""
+                }
                 isOptionEqualToValue={(option, value) => option.id === value.id}
                 filterOptions={(options, state) => {
                   const texto = state.inputValue.toLowerCase().trim();
@@ -823,6 +831,11 @@ export default function Factura() {
                     );
                   });
                 }}
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    {option.codigo} - {option.descripcion}
+                  </li>
+                )}
                 renderInput={(params) => (
                   <TextField
                     {...params}
@@ -839,11 +852,7 @@ export default function Factura() {
                         const articulo = buscarPorCodigoODescripcion(texto);
 
                         if (articulo) {
-                          seleccionarArticulo(articulo);
-                          setTimeout(() => {
-                            cantidadRef.current?.focus();
-                            cantidadRef.current?.select();
-                          }, 100);
+                          elegirArticulo(articulo);
                         } else {
                           alert("Artículo no encontrado");
                         }
@@ -863,6 +872,12 @@ export default function Factura() {
                 value={cantidad}
                 inputRef={cantidadRef}
                 onChange={(e) => setCantidad(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    agregarDetalle();
+                  }
+                }}
               />
             </Grid>
 

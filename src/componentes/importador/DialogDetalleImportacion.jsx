@@ -1,3 +1,5 @@
+import DownloadIcon from "@mui/icons-material/Download";
+import CloseIcon from "@mui/icons-material/Close";
 import {
   Dialog,
   DialogTitle,
@@ -8,65 +10,67 @@ import {
   Box,
 } from "@mui/material";
 
-export default function DialogDetalleImportacion({ open, onClose, log }) {
+export default function DialogDetalleImportacion({
+  open,
+  onClose,
+  log,
+  resultado,
+  archivo,
+}) {
+  const descargarLog = () => {
+    const fechaHora = new Date().toLocaleString("es-AR");
+
+    const contenido = `
+==================================================
+                 AVANCE FISCAL
+            DETALLE DE IMPORTACIÓN
+==================================================
+
+Archivo: ${archivo || "-"}
+
+Fecha: ${fechaHora}
+
+Leídos: ${resultado?.leidos ?? 0}
+Importados: ${resultado?.importados ?? 0}
+Duplicados: ${resultado?.salteados ?? 0}
+Errores: ${resultado?.errores ?? 0}
+
+==================================================
+DETALLE
+==================================================
+
+${log.map((item) => item.mensaje).join("\n")}
+`;
+
+    const blob = new Blob([contenido], {
+      type: "text/plain;charset=utf-8",
+    });
+
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+
+    const fechaArchivo = new Date()
+      .toLocaleDateString("es-AR")
+      .replaceAll("/", "-");
+
+    link.download = `Importacion-${fechaArchivo}.txt`;
+
+    link.click();
+
+    URL.revokeObjectURL(url);
+  };
+
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
-      <DialogTitle>Detalle de importación</DialogTitle>
+    <DialogActions>
+      <Button variant="outlined" onClick={descargarLog}>
+        📄 Descargar TXT
+      </Button>
 
-      <DialogContent dividers>
-        <Box
-          sx={{
-            maxHeight: 500,
-            overflowY: "auto",
-          }}
-        >
-          {log.map((item, index) => {
-            if (item.tipo === "titulo") {
-              return (
-                <Typography
-                  key={index}
-                  variant="h6"
-                  sx={{
-                    mt: 2,
-                    mb: 1,
-                    fontWeight: "bold",
-                    color: "primary.main",
-                    borderBottom: "1px solid #ddd",
-                    pb: 0.5,
-                  }}
-                >
-                  {item.mensaje}
-                </Typography>
-              );
-            }
-
-            return (
-              <Typography
-                key={index}
-                variant="body2"
-                sx={{
-                  mb: 0.8,
-                  color:
-                    item.tipo === "ok"
-                      ? "success.main"
-                      : item.tipo === "duplicado"
-                        ? "warning.main"
-                        : "error.main",
-                }}
-              >
-                {item.tipo === "ok" && "✅ "}
-                {item.tipo === "duplicado" && "⚠️ "}
-                {item.tipo === "error" && "❌ "}
-                {item.mensaje}
-              </Typography>
-            );
-          })}
-        </Box>
-      </DialogContent>
-
-      <DialogActions>
-        <Button onClick={onClose}>Cerrar</Button>
-      </DialogActions>
-    </Dialog>
+      <Button variant="contained" onClick={onClose}>
+        Cerrar
+      </Button>
+    </DialogActions>
   );
 }

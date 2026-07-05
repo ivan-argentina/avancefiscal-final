@@ -3,6 +3,7 @@ import GraficoVentas from "../componentes/dashboard/GraficoVentas";
 import DashboardHeader from "../componentes/dashboard/DashboardHeader";
 import UltimasFacturas from "../componentes/dashboard/UltimasFacturas";
 import GraficoVentasDiarias from "../componentes/dashboard/GraficoVentasDiarias";
+import TarjetaMonotributo from "../componentes/dashboard/TarjetaMonotributo";
 import {
   Box,
   Card,
@@ -106,11 +107,15 @@ export default function Dashboard() {
       .eq("idempresa", idEmpresa)
       .eq("estado_fiscal", "pendiente");
 
-    const { count: stockBajo } = await supabase
+    const { data: articulosStock } = await supabase
       .from("articulos")
-      .select("*", { count: "exact", head: true })
-      .eq("idempresa", idEmpresa)
-      .filter("stock", "lte", "stock_minimo");
+      .select("stock, stock_minimo")
+      .eq("idempresa", idEmpresa);
+
+    const stockBajo =
+      articulosStock?.filter(
+        (a) => Number(a.stock || 0) <= Number(a.stock_minimo || 0),
+      ).length || 0;
 
     const { count: stockNegativo } = await supabase
       .from("articulos")
@@ -317,6 +322,11 @@ export default function Dashboard() {
 
         <Grid size={{ xs: 12, lg: 4 }}>
           <StockBajo idEmpresa={idEmpresa} />
+        </Grid>
+      </Grid>
+      <Grid container spacing={3} sx={{ mt: 1 }}>
+        <Grid size={{ xs: 12, md: 6 }}>
+          <TarjetaMonotributo monotributo={monotributo} />
         </Grid>
       </Grid>
 
