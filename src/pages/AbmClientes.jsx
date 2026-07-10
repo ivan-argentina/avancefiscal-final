@@ -9,6 +9,7 @@ import {
   InputAdornment,
   Grid,
   IconButton,
+  Autocomplete,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
 import { supabase } from "../hook/supabaseClient";
@@ -24,6 +25,7 @@ import SaveIcon from "@mui/icons-material/Save";
 import LocationCityIcon from "@mui/icons-material/LocationCity";
 import SearchIcon from "@mui/icons-material/Search";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import ConfirmDialog from "../componentes/ConfirmDialog";
 
 export default function AbmClientes() {
   const Navigate = useNavigate();
@@ -48,6 +50,14 @@ export default function AbmClientes() {
   const [error, setError] = useState("");
   const [condicionIvaId, setCondicionIvaId] = useState("");
   const [condicionesIva, setCondicionesIva] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    textoConfirmar: "Aceptar",
+    color: "primary",
+    accion: null,
+  });
 
   const handleCuitChange = (e) => {
     const valor = e.target.value.replace(/\D/g, "");
@@ -117,6 +127,7 @@ export default function AbmClientes() {
   `,
       )
       .eq("idempresa", idEmpresa)
+      .eq("activo", true)
       .order("nombre");
 
     if (error) {
@@ -161,16 +172,41 @@ export default function AbmClientes() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-    const { data } = await supabase
+    const { data, error: errorFacturas } = await supabase
       .from("facturas")
       .select("id")
       .eq("idcliente", id)
       .eq("idempresa", idEmpresa);
 
-    if (data && data.length > 0) {
-      setMensaje("No se puede eliminar: tiene facturas asociadas");
-      setTipo("warning");
+    if (errorFacturas) {
+      console.error(errorFacturas);
+      setMensaje("Error al verificar facturas asociadas");
+      setTipo("error");
       setOpen(true);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      const { error } = await supabase
+        .from("clientes")
+        .update({ activo: false })
+        .eq("id", id)
+        .eq("idempresa", idEmpresa);
+
+      if (error) {
+        console.error(error);
+        setMensaje("Error al desactivar cliente");
+        setTipo("error");
+        setOpen(true);
+        return;
+      }
+
+      setMensaje("Cliente desactivado correctamente");
+      setTipo("success");
+      setOpen(true);
+
+      const clientesActualizados = await cargarClientes();
+      setClientes(clientesActualizados);
       return;
     }
 
@@ -182,17 +218,18 @@ export default function AbmClientes() {
 
     if (error) {
       console.error(error);
-      setMensaje("Error al eliminar");
+      setMensaje("Error al eliminar cliente");
       setTipo("error");
       setOpen(true);
       return;
     }
 
-    setMensaje("Cliente eliminado");
+    setMensaje("Cliente eliminado correctamente");
     setTipo("success");
     setOpen(true);
 
-    await cargarClientes();
+    const clientesActualizados = await cargarClientes();
+    setClientes(clientesActualizados);
   };
 
   // 🔹 Guardar clientes
@@ -312,7 +349,17 @@ export default function AbmClientes() {
       width: 70,
       renderCell: (params) => (
         <IconButton
-          onClick={() => eliminarClientes(params.row.id)}
+          onClick={() =>
+            setConfirmDialog({
+              open: true,
+              titulo: "Eliminar cliente",
+              mensaje:
+                "Si el cliente tiene facturas asociadas será desactivado. Si no tiene facturas, será eliminado definitivamente. ¿Deseás continuar?",
+              textoConfirmar: "Aceptar",
+              color: "error",
+              accion: () => eliminarClientes(params.row.id),
+            })
+          }
           color="error"
         >
           <DeleteIcon />
@@ -345,7 +392,13 @@ export default function AbmClientes() {
   return (
     <Container maxWidth="lg">
       {/* FORM */}
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3 }}>
+      <Paper
+        sx={{
+          p: 2,
+          borderRadius: 3,
+          mb: 2,
+        }}
+      >
         <Typography variant="h5" align="center" gutterBottom>
           Carga de Clientes
         </Typography>
@@ -378,19 +431,18 @@ export default function AbmClientes() {
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              select
-              label="Ciudad"
-              fullWidth
-              value={ciudadId}
-              onChange={(e) => setCiudadId(e.target.value)}
-            >
-              {ciudades.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.nombre}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Autocomplete
+              options={ciudades}
+              getOptionLabel={(option) => option?.nombre || ""}
+              value={ciudades.find((c) => c.id === ciudadId) || null}
+              onChange={(_, nuevaCiudad) => {
+                setCiudadId(nuevaCiudad ? nuevaCiudad.id : "");
+              }}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={(params) => (
+                <TextField {...params} label="Ciudad" fullWidth size="small" />
+              )}
+            />
           </Grid>
           {/* FILA 2 */}
           <Grid size={{ xs: 12, md: 4 }}>
@@ -470,9 +522,7 @@ export default function AbmClientes() {
         sx={{
           p: 2,
           borderRadius: 3,
-          display: "flex",
-          flexDirection: "column",
-          height: 400,
+          mb: 2,
         }}
       >
         <TextField
@@ -491,15 +541,46 @@ export default function AbmClientes() {
           onChange={(e) => setBuscar(e.target.value)}
         />
 
-        <Box sx={{ flexGrow: 1 }}>
+        <Box sx={{ height: 430, width: "100%", mt: 1 }}>
           <DataGrid
             rows={clientesFiltrados}
             columns={columnas}
-            pageSize={5}
+            getRowId={(row) => row.id}
+            rowHeight={38}
             density="compact"
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 50, page: 0 },
+              },
+            }}
+            pageSizeOptions={[20, 50, 100]}
+            disableRowSelectionOnClick
           />
         </Box>
       </Paper>
+      <ConfirmDialog
+        open={confirmDialog.open}
+        titulo={confirmDialog.titulo}
+        mensaje={confirmDialog.mensaje}
+        textoConfirmar={confirmDialog.textoConfirmar}
+        colorConfirmar={confirmDialog.color}
+        onClose={() =>
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+        onConfirm={async () => {
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }));
+
+          if (confirmDialog.accion) {
+            await confirmDialog.accion();
+          }
+        }}
+      />
     </Container>
   );
 }

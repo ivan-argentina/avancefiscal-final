@@ -248,7 +248,6 @@ const GenerarPdf = forwardRef(
                   {letraComprobante || "X"}
                 </Typography>
               </Box>
-
               <Typography
                 sx={{
                   fontSize: 11,
@@ -257,11 +256,17 @@ const GenerarPdf = forwardRef(
                 }}
               >
                 COD.{" "}
-                {letraComprobante === "C"
-                  ? "011"
-                  : letraComprobante === "B"
-                    ? "006"
-                    : "001"}
+                {tipoComprobante === "nota_de_credito"
+                  ? letraComprobante === "C"
+                    ? "013"
+                    : letraComprobante === "B"
+                      ? "008"
+                      : "003"
+                  : letraComprobante === "C"
+                    ? "011"
+                    : letraComprobante === "B"
+                      ? "006"
+                      : "001"}
               </Typography>
             </Box>
 
@@ -351,6 +356,8 @@ const GenerarPdf = forwardRef(
                 <strong>Condición frente al IVA:</strong>{" "}
                 {clienteSeleccionado?.condicionIva?.descripcion ||
                   clienteSeleccionado?.condicion_iva?.descripcion ||
+                  clienteSeleccionado?.condicion_iva ||
+                  clienteSeleccionado?.condicionIva ||
                   "Consumidor Final"}
               </Typography>
 

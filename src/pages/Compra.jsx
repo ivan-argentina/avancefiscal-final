@@ -22,6 +22,7 @@ import {
   TextField,
   Typography,
   Button,
+  CircularProgress,
 } from "@mui/material";
 
 import { DataGrid } from "@mui/x-data-grid";
@@ -53,9 +54,14 @@ export default function Compra() {
   const [cantidad, setCantidad] = useState("");
   const [precio, setPrecio] = useState("");
   const [detalle, setDetalle] = useState([]);
-
+  const [articuloId, setArticuloId] = useState("");
+  const [precioCosto, setPrecioCosto] = useState(0);
   const [puntoVenta, setPuntoVenta] = useState("1");
-
+  const [mensaje, setMensaje] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [open, setOpen] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const cantidadRef = useRef(null);
   const totalCompra = useMemo(() => {
     return detalle.reduce((acc, item) => acc + Number(item.subtotal || 0), 0);
   }, [detalle]);
@@ -143,16 +149,23 @@ export default function Compra() {
 
   const agregarDetalle = () => {
     if (!articuloSeleccionado) {
-      alert("Seleccione un articulo");
+      setMensaje("Seleccione un artículo");
+      setTipo("warning");
+      setOpen(true);
+      return;
       return;
     }
     if (!cantidad || Number(cantidad) <= 0) {
-      alert("Ingrese una cantidad valida");
+      setMensaje("Ingrese una cantidad válida");
+      setTipo("warning");
+      setOpen(true);
       return;
     }
 
     if (!precio || Number(precio) <= 0) {
-      alert("Ingrese un precio valida");
+      setMensaje("Ingrese un precio válido");
+      setTipo("warning");
+      setOpen(true);
       return;
     }
     const subtotal = Number(cantidad) * Number(precio);
@@ -182,93 +195,135 @@ export default function Compra() {
   };
   const guardarCompra = async () => {
     if (!proveedorId) {
-      alert("Seleccione un proveedor");
+      setMensaje("Seleccione un proveedor");
+      setTipo("warning");
+      setOpen(true);
       return;
     }
+
     if (detalle.length === 0) {
-      alert("Agregue al menos un Articulo");
-      return;
-    }
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    if (!idEmpresa) {
-      alert("No se encontró la empresa del usuario");
+      setMensaje("Ingrese al menos un artículo");
+      setTipo("warning");
+      setOpen(true);
       return;
     }
 
-    const compraNueva = {
-      fecha,
-      idproveedor: proveedorId,
-      tipo_comprobante: tipoComprobante,
-      letra_comprobante: letraComprobante,
-      punto_venta: puntoVenta,
-      numero_comprobante: numeroComprobante,
-      forma_pago: formaPago,
-      medio_pago: medioPago,
-      observaciones,
-      subtotal: totalCompra,
-      total: totalCompra,
-      saldo: formaPago === "Cuenta corriente" ? totalCompra : 0,
-      estado_pago: formaPago === "Cuenta corriente" ? "pendiente" : "pagada",
-      idempresa: idEmpresa,
-      idusuario: usuarioGuardado.id,
-    };
-    const { data: compraGuardada, errorCompra } = await supabase
-      .from("compras")
-      .insert([compraNueva])
-      .select()
-      .single();
+    if (guardando) return;
 
-    if (errorCompra) {
-      console.error("ERROR COMPLETO:", errorCompra);
-      alert(errorCompra.message);
-      return;
-    }
-    const detalleCompra = detalle.map((item) => ({
-      idcompra: compraGuardada.id,
-      idarticulo: item.idarticulo,
-      cantidad: item.cantidad,
-      precio: item.precio,
-      subtotal: item.subtotal,
-    }));
+    setGuardando(true);
 
-    const { error: errorDetalle } = await supabase
-      .from("detalle_compras")
-      .insert(detalleCompra);
+    try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-    if (errorDetalle) {
-      console.error("Error al guardar el detalle", errorDetalle);
-      alert("La compra se guardo, pero hubo un error en el detalle");
-      return;
-    }
-
-    for (const item of detalle) {
-      const articulo = articulos.find((a) => a.id === item.idarticulo);
-      const stockActual = Number(articulo?.stock || 0);
-      const nuevoStock = stockActual + Number(item.cantidad);
-
-      const { error: errorStock } = await supabase
-        .from("articulos")
-        .update({ stock: nuevoStock })
-        .eq("id", item.idarticulo);
-
-      if (errorStock) {
-        console.error("Error al actualizar el stock", errorStock);
+      if (!idEmpresa) {
+        setMensaje("No se encontró ninguna empresa");
+        setTipo("warning");
+        setOpen(true);
+        return;
       }
-    }
-    alert("Compra guardada correctamente");
 
-    setProveedorId("");
-    setProveedorSeleccionado(null);
-    setFormaPago("Contado");
-    setMedioPago("Efectivo");
-    setTipoComprobante("factura");
-    setLetraComprobante("A");
-    setNumeroComprobante("");
-    setObservaciones("");
-    setDetalle([]);
-    await cargarArticulos();
+      const compraNueva = {
+        fecha,
+        idproveedor: proveedorId,
+        tipo_comprobante: tipoComprobante,
+        letra_comprobante: letraComprobante,
+        punto_venta: puntoVenta,
+        numero_comprobante: numeroComprobante,
+        forma_pago: formaPago,
+        medio_pago: medioPago,
+        observaciones,
+        subtotal: totalCompra,
+        total: totalCompra,
+        saldo: formaPago === "Cuenta corriente" ? totalCompra : 0,
+        estado_pago: formaPago === "Cuenta corriente" ? "pendiente" : "pagada",
+        idempresa: idEmpresa,
+        idusuario: usuarioGuardado.id,
+      };
+
+      const { data: compraGuardada, error: errorCompra } = await supabase
+        .from("compras")
+        .insert([compraNueva])
+        .select()
+        .single();
+
+      if (errorCompra) {
+        throw errorCompra;
+      }
+
+      const detalleCompra = detalle.map((item) => ({
+        idcompra: compraGuardada.id,
+        idarticulo: item.idarticulo,
+        cantidad: item.cantidad,
+        precio: item.precio,
+        subtotal: item.subtotal,
+      }));
+
+      const { error: errorDetalle } = await supabase
+        .from("detalle_compras")
+        .insert(detalleCompra);
+
+      if (errorDetalle) {
+        throw errorDetalle;
+      }
+
+      for (const item of detalle) {
+        const articulo = articulos.find((a) => a.id === item.idarticulo);
+        const stockActual = Number(articulo?.stock || 0);
+        const nuevoStock = stockActual + Number(item.cantidad);
+
+        const costoAnterior = Number(articulo?.precio_costo || 0);
+        const precioVentaAnterior = Number(articulo?.precio || 0);
+        const costoNuevo = Number(item.precio);
+
+        let precioVentaNuevo = precioVentaAnterior;
+
+        // Mantiene el mismo porcentaje de margen
+        if (costoAnterior > 0 && precioVentaAnterior > 0) {
+          const factorMargen = precioVentaAnterior / costoAnterior;
+          precioVentaNuevo = Number((costoNuevo * factorMargen).toFixed(2));
+        }
+
+        const { error: errorStock } = await supabase
+          .from("articulos")
+          .update({
+            stock: nuevoStock,
+            precio_costo: costoNuevo,
+            precio: precioVentaNuevo,
+            precio_costo: Number(item.precio),
+          })
+          .eq("id", item.idarticulo)
+          .eq("idempresa", idEmpresa);
+
+        if (errorStock) {
+          throw errorStock;
+        }
+      }
+
+      setProveedorId("");
+      setProveedorSeleccionado(null);
+      setFormaPago("Contado");
+      setMedioPago("efectivo");
+      setTipoComprobante("factura");
+      setLetraComprobante("A");
+      setNumeroComprobante("");
+      setObservaciones("");
+      setDetalle([]);
+
+      await cargarArticulos();
+
+      setMensaje("Compra guardada correctamente");
+      setTipo("success");
+      setOpen(true);
+    } catch (error) {
+      console.error("Error al guardar la compra:", error);
+
+      setMensaje(error.message || "Error al guardar la compra");
+      setTipo("error");
+      setOpen(true);
+    } finally {
+      setGuardando(false);
+    }
   };
 
   const columnasDetalle = [
@@ -334,20 +389,23 @@ export default function Compra() {
       >
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField
-              select
-              label="Proveedor"
-              fullWidth
-              size="small"
-              value={proveedorId}
-              onChange={(e) => manejarProveedor(e.target.value)}
-            >
-              {proveedores.map((p) => (
-                <MenuItem key={p.id} value={String(p.id)}>
-                  {p.nombre}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Autocomplete
+              options={proveedores}
+              getOptionLabel={(option) => option?.nombre || ""}
+              value={proveedores.find((p) => p.id === proveedorId) || null}
+              onChange={(_, nuevoProveedor) => {
+                setProveedorId(nuevoProveedor ? nuevoProveedor.id : "");
+              }}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Proveedor"
+                  fullWidth
+                  size="small"
+                />
+              )}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 2 }}>
             <TextField
@@ -513,55 +571,37 @@ export default function Compra() {
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, md: 5 }}>
               <Autocomplete
-                options={articulos || []}
-                size="small"
-                fullWidth
+                options={articulos}
+                getOptionLabel={(option) =>
+                  `${option.codigo || ""} - ${option.descripcion || ""}`
+                }
                 value={articuloSeleccionado}
-                inputValue={inputArticulo}
-                onInputChange={(event, newInputValue) => {
-                  setInputArticulo(newInputValue);
+                onChange={(_, nuevoArticulo) => {
+                  if (!nuevoArticulo) {
+                    setArticuloId("");
+                    setArticuloSeleccionado(null);
+                    setPrecio("");
+                    setCantidad(1);
+                    return;
+                  }
+
+                  setArticuloId(nuevoArticulo.id);
+                  setArticuloSeleccionado(nuevoArticulo);
+                  setPrecio(nuevoArticulo.precio_costo || 0);
+                  setCantidad(1);
+
+                  setTimeout(() => {
+                    cantidadRef.current?.focus();
+                    cantidadRef.current?.select();
+                  }, 0);
                 }}
-                onChange={(event, newValue) => {
-                  if (newValue) seleccionarArticulo(newValue);
-                }}
-                getOptionLabel={(option) => option?.descripcion || ""}
                 isOptionEqualToValue={(option, value) => option.id === value.id}
-                filterOptions={(options, state) => {
-                  const texto = state.inputValue.toLowerCase().trim();
-
-                  return options.filter((option) => {
-                    const codigo = String(option.codigo || "").toLowerCase();
-                    const descripcion = String(
-                      option.descripcion || "",
-                    ).toLowerCase();
-
-                    return (
-                      codigo.includes(texto) || descripcion.includes(texto)
-                    );
-                  });
-                }}
                 renderInput={(params) => (
                   <TextField
                     {...params}
-                    inputRef={inputArticuloRef}
-                    label="Artículo o código de barras"
+                    label="Artículo"
                     fullWidth
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-
-                        const texto = inputArticulo.trim();
-                        if (!texto) return;
-
-                        const articulo = buscarPorCodigoODescripcion(texto);
-
-                        if (articulo) {
-                          seleccionarArticulo(articulo);
-                        } else {
-                          alert("Artículo no encontrado");
-                        }
-                      }
-                    }}
+                    size="small"
                   />
                 )}
               />
@@ -570,10 +610,11 @@ export default function Compra() {
               <TextField
                 label="Cantidad"
                 type="number"
-                fullWidth
-                size="small"
                 value={cantidad}
                 onChange={(e) => setCantidad(e.target.value)}
+                inputRef={cantidadRef}
+                fullWidth
+                size="small"
               />
             </Grid>
 
@@ -681,12 +722,19 @@ export default function Compra() {
           </Box>
           <Box sx={{ display: "flex", justifyContent: "center" }}>
             <Button
-              variant="contained"
-              color="success"
-              startIcon={<SaveIcon />}
+              type="button"
               onClick={guardarCompra}
+              variant="contained"
+              disabled={guardando}
+              startIcon={
+                guardando ? (
+                  <CircularProgress size={18} color="inherit" />
+                ) : (
+                  <SaveIcon />
+                )
+              }
             >
-              Guardar Compra
+              {guardando ? "Guardando..." : "Guardar"}
             </Button>
           </Box>
 

@@ -172,7 +172,10 @@ export default function Facturas() {
       telefono,
       email,
       idciudad,
-      ciudades(nombre)
+      ciudades(nombre),
+       condicion_iva (
+        descripcion
+       )
     ),
 
     detalle_factura (
@@ -280,6 +283,13 @@ export default function Facturas() {
       precio: item.precio,
       subtotal: item.subtotal,
     }));
+    console.log("CLIENTE PDF:", {
+      ...factura.clientes,
+      condicion_iva:
+        factura.clientes?.condicion_iva?.descripcion ||
+        factura.clientes?.condicion_iva ||
+        "Consumidor Final",
+    });
 
     setPdfData({
       empresa: {
@@ -291,9 +301,26 @@ export default function Facturas() {
       tipoComprobante: factura.tipo_comprobante,
       letraComprobante: factura.letra_comprobante || "C",
       formaPago: factura.forma_pago,
-      clienteSeleccionado: factura.clientes,
+      clienteSeleccionado: {
+        ...factura.clientes,
+        condicion_iva:
+          factura.clientes?.condicion_iva?.descripcion ||
+          factura.clientes?.condicion_iva ||
+          "Consumidor Final",
+      },
       detalle: detalleFormateado,
       totalFactura: factura.total,
+
+      neto:
+        factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
+          ? Number((factura.total / 1.21).toFixed(2))
+          : factura.total,
+
+      iva:
+        factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
+          ? Number((factura.total - factura.total / 1.21).toFixed(2))
+          : 0,
+
       observaciones: factura.observaciones,
       puntoVenta: factura.punto_venta,
       cae: factura.cae,
@@ -302,7 +329,7 @@ export default function Facturas() {
     });
 
     const nombreComprobante =
-      factura.tipoComprobante === "nota_de_credito"
+      factura.tipo_comprobante === "nota_de_credito"
         ? "nota-credito"
         : "factura";
 
@@ -763,6 +790,8 @@ export default function Facturas() {
           clienteSeleccionado={pdfData.clienteSeleccionado}
           detalle={pdfData.detalle}
           totalFactura={pdfData.totalFactura}
+          neto={pdfData.neto}
+          iva={pdfData.iva}
           observaciones={pdfData.observaciones}
           cae={pdfData.cae}
           vencimientoCae={pdfData.vencimientoCae}

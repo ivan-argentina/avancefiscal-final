@@ -1,16 +1,18 @@
 import {
   Box,
-  MenuItem,
-  Paper,
-  TextField,
-  Typography,
   Button,
-  Chip,
+  TextField,
   IconButton,
-  InputAdornment,
+  Typography,
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
+  DialogActions,
+  Paper,
+  InputAdornment,
+  MenuItem,
+  Chip,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import { supabase } from "../hook/supabaseClient";
@@ -28,6 +30,8 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import CloseIcon from "@mui/icons-material/Close";
 import ModalImagen from "../componentes/ModalImagen";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import ConfirmDialog from "../componentes/ConfirmDialog";
+
 import { useRef } from "react";
 
 export default function AbmArticulos() {
@@ -54,8 +58,105 @@ export default function AbmArticulos() {
   const [busqueda, setBusqueda] = useState("");
   const [openFoto, setOpenFoto] = useState(false);
   const [fotoSeleccionada, setFotoSeleccionada] = useState("");
+  const [dialogoAbierto, setDialogoAbierto] = useState(false);
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState(null);
+  const [accionDialogo, setAccionDialogo] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmData, setConfirmData] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    color: "primary",
+    textoConfirmar: "Aceptar",
+    accion: null,
+  });
   const codigoRef = useRef(null);
+  const prepararEliminarArticulo = async (articulo) => {
+    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
+    const { count, error } = await supabase
+      .from("detalle_factura")
+      .select("*", { count: "exact", head: true })
+      .eq("idarticulo", articulo.id)
+      .eq("idempresa", idEmpresa);
+
+    if (error) {
+      console.log(error);
+      mostrarNotificacion("Error al verificar movimientos", "error");
+      return;
+    }
+
+    if (count > 0) {
+      setConfirmDialog({
+        open: true,
+        titulo: "Desactivar artículo",
+        mensaje: `El artículo "${articulo.descripcion}" ya posee movimientos y no puede eliminarse.
+
+¿Desea desactivarlo para que deje de aparecer en nuevas operaciones?`,
+        textoConfirmar: "Desactivar",
+        color: "warning",
+        accion: async () => {
+          await desactivarArticulo(articulo, idEmpresa);
+        },
+      });
+    } else {
+      setConfirmDialog({
+        open: true,
+        titulo: "Eliminar artículo",
+        mensaje: `¿Está seguro que desea eliminar el artículo "${articulo.descripcion}"?`,
+        textoConfirmar: "Eliminar",
+        color: "error",
+        accion: async () => {
+          await eliminarArticuloDefinitivo(articulo, idEmpresa);
+        },
+      });
+    }
+  };
+
+  const desactivarArticulo = async (articulo, idEmpresa) => {
+    const { error } = await supabase
+      .from("articulos")
+      .update({ activo: false })
+      .eq("id", articulo.id)
+      .eq("idempresa", idEmpresa);
+
+    if (error) {
+      console.log(error);
+      mostrarNotificacion("Error al desactivar artículo", "error");
+      return;
+    }
+
+    mostrarNotificacion("Artículo desactivado correctamente", "info");
+    cargarArticulos();
+  };
+
+  const eliminarArticuloDefinitivo = async (articulo, idEmpresa) => {
+    const { error } = await supabase
+      .from("articulos")
+      .delete()
+      .eq("id", articulo.id)
+      .eq("idempresa", idEmpresa);
+
+    if (error) {
+      console.log(error);
+      mostrarNotificacion("Error al eliminar artículo", "error");
+      return;
+    }
+
+    if (articulo.imagen_url) {
+      await eliminarImagenStorage(articulo.imagen_url);
+    }
+
+    mostrarNotificacion("Artículo eliminado", "info");
+    cargarArticulos();
+  };
+
+  const abrirConfirmacionEliminar = (articulo) => {
+    setConfirmData(articulo);
+    setConfirmOpen(true);
+  };
   const buscarArticuloPorCodigo = async (codigo) => {
     if (!codigo) return;
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
@@ -345,6 +446,7 @@ export default function AbmArticulos() {
         familias!fk_articulos_familia(nombre)`,
       )
       .eq("idempresa", idEmpresa)
+      .eq("activo", true)
       .order("descripcion", { ascending: true });
 
     if (error) {
@@ -387,32 +489,6 @@ export default function AbmArticulos() {
 
   const cancelarEdicion = () => {
     resetFormulario();
-  };
-
-  const eliminarArticulo = async (articulo, idEmpresa) => {
-    if (!window.confirm("¿Eliminar artículo?")) return;
-
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    const { error } = await supabase
-      .from("articulos")
-      .delete()
-      .eq("id", articulo.id)
-      .eq("idempresa", idEmpresa);
-
-    if (error) {
-      console.log(error);
-      mostrarNotificacion("Error al eliminar artículo", "error");
-      return;
-    }
-
-    if (articulo.imagen_url) {
-      await eliminarImagenStorage(articulo.imagen_url);
-    }
-
-    mostrarNotificacion("Artículo eliminado", "info");
-    cargarArticulos();
   };
 
   const guardarArticulos = async (e) => {
@@ -624,8 +700,11 @@ export default function AbmArticulos() {
           <Chip
             label={params.row?.familias?.nombre || "Sin familia"}
             color="primary"
-            size="small"
             variant="outlined"
+            sx={{
+              fontSize: 11,
+              height: 15,
+            }}
           />
         </Box>
       ),
@@ -654,7 +733,7 @@ export default function AbmArticulos() {
             <IconButton
               color="error"
               size="small"
-              onClick={() => eliminarArticulo(params.row)}
+              onClick={() => prepararEliminarArticulo(params.row)}
             >
               <DeleteIcon fontSize="small" />
             </IconButton>
@@ -703,20 +782,23 @@ export default function AbmArticulos() {
   return (
     <Box
       sx={{
-        minHeight: "100vh",
+        height: "100vh",
         p: 1.5,
         backgroundColor: "#f7f7f7",
+        overflow: "hidden",
       }}
     >
       <Paper
         elevation={3}
         sx={{
-          minHeight: "calc(100vh - 24px)",
+          height: "calc(100vh - 24px)",
           display: "flex",
           flexDirection: "column",
           p: 2,
           borderRadius: 3,
           gap: 2,
+          overflow: "hidden",
+          minHeight: 0,
         }}
       >
         <Typography
@@ -1015,11 +1097,13 @@ export default function AbmArticulos() {
             <MenuItem value="sin-stock">Sin Stock</MenuItem>
           </TextField>
         </Box>
-        <Box sx={{ flexGrow: 1, height: "700vh", minHeight: 500 }}>
+        <Box sx={{ flexGrow: 1, height: 430, width: "100%", mt: 2 }}>
           <DataGrid
             rows={articulosFiltrados}
             columns={columnas}
-            rowHeight={50}
+            getRowId={(row) => row.id}
+            rowHeight={38}
+            density="compact"
             initialState={{
               pagination: {
                 paginationModel: { pageSize: 50, page: 0 },
@@ -1027,7 +1111,6 @@ export default function AbmArticulos() {
             }}
             pageSizeOptions={[20, 50, 100]}
             disableRowSelectionOnClick
-            density="compact"
             getRowClassName={(params) => {
               const stock = Number(params.row?.stock || 0);
               const minimo = Number(params.row?.stock_minimo || 0);
@@ -1047,9 +1130,8 @@ export default function AbmArticulos() {
                 py: 0.5,
                 fontSize: 12,
                 display: "flex",
-                alignItems: "center", // centra verticalmente
+                alignItems: "center",
               },
-
               "& .MuiDataGrid-columnHeaderTitle": {
                 fontWeight: 700,
               },
@@ -1079,6 +1161,29 @@ export default function AbmArticulos() {
           />
         </Box>
       </Paper>
+      <ConfirmDialog
+        open={confirmDialog.open}
+        titulo={confirmDialog.titulo}
+        mensaje={confirmDialog.mensaje}
+        textoConfirmar={confirmDialog.textoConfirmar}
+        colorConfirmar={confirmDialog.color}
+        onClose={() =>
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+        onConfirm={async () => {
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }));
+
+          if (confirmDialog.accion) {
+            await confirmDialog.accion();
+          }
+        }}
+      />
     </Box>
   );
 }

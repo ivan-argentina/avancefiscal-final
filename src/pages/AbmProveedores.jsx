@@ -9,6 +9,7 @@ import {
   Paper,
   TextField,
   Typography,
+  Autocomplete,
 } from "@mui/material";
 
 import { DataGrid } from "@mui/x-data-grid";
@@ -24,6 +25,7 @@ import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
 import SearchIcon from "@mui/icons-material/Search";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import ConfirmDialog from "../componentes/ConfirmDialog";
 
 export default function AbmProveedores() {
   const [nombre, setNombre] = useState("");
@@ -47,6 +49,14 @@ export default function AbmProveedores() {
   const [mensaje, setMensaje] = useState("");
   const [tipo, setTipo] = useState("success");
   const [open, setOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    textoConfirmar: "Aceptar",
+    color: "primary",
+    accion: null,
+  });
 
   const handleCuitChange = (e) => {
     const valor = e.target.value.replace(/\D/g, "");
@@ -111,6 +121,7 @@ export default function AbmProveedores() {
   `,
       )
       .eq("idempresa", idEmpresa)
+      .eq("activo", true)
       .order("nombre", { ascending: true });
 
     console.log("Empresa:", idEmpresa);
@@ -163,24 +174,59 @@ export default function AbmProveedores() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-    const confirmar = window.confirm("¿Desea eliminar este proveedor?");
-    if (!confirmar) return;
+    const { data, error: errorCompras } = await supabase
+      .from("compras")
+      .select("id")
+      .eq("idproveedor", id)
+      .eq("idempresa", idEmpresa);
 
-    const { error } = await supabase
-      .from("proveedores")
-      .delete()
-      .eq("idempresa", idEmpresa)
-      .eq("id", id);
-
-    if (error) {
-      console.error(error);
-      setMensaje("Error al eliminar el proveedor");
+    if (errorCompras) {
+      console.error(errorCompras);
+      setMensaje("Error al verificar compras asociadas");
       setTipo("error");
       setOpen(true);
       return;
     }
 
-    setMensaje("Proveedor eliminado");
+    if (data && data.length > 0) {
+      const { error } = await supabase
+        .from("proveedores")
+        .update({ activo: false })
+        .eq("id", id)
+        .eq("idempresa", idEmpresa);
+
+      if (error) {
+        console.error(error);
+        setMensaje("Error al desactivar proveedor");
+        setTipo("error");
+        setOpen(true);
+        return;
+      }
+
+      setMensaje("Proveedor desactivado correctamente");
+      setTipo("success");
+      setOpen(true);
+
+      const proveedoresActualizados = await cargarProveedores();
+      setProveedores(proveedoresActualizados);
+      return;
+    }
+
+    const { error } = await supabase
+      .from("proveedores")
+      .delete()
+      .eq("id", id)
+      .eq("idempresa", idEmpresa);
+
+    if (error) {
+      console.error(error);
+      setMensaje("Error al eliminar proveedor");
+      setTipo("error");
+      setOpen(true);
+      return;
+    }
+
+    setMensaje("Proveedor eliminado correctamente");
     setTipo("success");
     setOpen(true);
 
@@ -295,7 +341,17 @@ export default function AbmProveedores() {
       sortable: false,
       renderCell: (params) => (
         <IconButton
-          onClick={() => eliminarProveedor(params.row.id)}
+          onClick={() =>
+            setConfirmDialog({
+              open: true,
+              titulo: "Eliminar proveedor",
+              mensaje:
+                "Si el proveedor tiene compras asociadas será desactivado. Si no tiene compras, será eliminado definitivamente. ¿Deseás continuar?",
+              textoConfirmar: "Aceptar",
+              color: "error",
+              accion: () => eliminarProveedor(params.row.id),
+            })
+          }
           color="error"
         >
           <DeleteIcon />
@@ -370,20 +426,18 @@ export default function AbmProveedores() {
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
-              select
-              label="Ciudad"
-              fullWidth
-              value={ciudadId}
-              onChange={(e) => setCiudadId(e.target.value)}
-              error={!!error && !ciudadId}
-            >
-              {ciudades.map((c) => (
-                <MenuItem key={c.id} value={c.id}>
-                  {c.nombre}
-                </MenuItem>
-              ))}
-            </TextField>
+            <Autocomplete
+              options={ciudades}
+              getOptionLabel={(option) => option?.nombre || ""}
+              value={ciudades.find((c) => c.id === ciudadId) || null}
+              onChange={(_, nuevaCiudad) => {
+                setCiudadId(nuevaCiudad ? nuevaCiudad.id : "");
+              }}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              renderInput={(params) => (
+                <TextField {...params} label="Ciudad" fullWidth size="small" />
+              )}
+            />
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
@@ -502,6 +556,29 @@ export default function AbmProveedores() {
           />
         </Box>
       </Paper>
+      <ConfirmDialog
+        open={confirmDialog.open}
+        titulo={confirmDialog.titulo}
+        mensaje={confirmDialog.mensaje}
+        textoConfirmar={confirmDialog.textoConfirmar}
+        colorConfirmar={confirmDialog.color}
+        onClose={() =>
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+        onConfirm={async () => {
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+          }));
+
+          if (confirmDialog.accion) {
+            await confirmDialog.accion();
+          }
+        }}
+      />
     </Container>
   );
 }

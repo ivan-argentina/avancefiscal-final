@@ -128,26 +128,44 @@ export default function Factura() {
 
     const condicionEmpresa = empresa?.condicion_iva || empresa?.condicionIva;
 
-    if (condicionEmpresa === "Monotributista") {
-      return "C";
-    }
+    const condicionCliente =
+      clienteSeleccionado?.condicion_iva?.descripcion ||
+      clienteSeleccionado?.condicion_iva ||
+      clienteSeleccionado?.condicionIva ||
+      "";
 
     if (tipoComprobante === "remito" || tipoComprobante === "presupuesto") {
       return "X";
     }
 
-    if (clienteSeleccionado?.condicion_iva === "Responsable Inscripto") {
+    if (condicionEmpresa === "Monotributista") {
+      return "C";
+    }
+
+    if (
+      condicionEmpresa === "Responsable Inscripto" &&
+      condicionCliente === "Responsable Inscripto"
+    ) {
+      return "A";
+    }
+
+    return "B";
+
+    if (
+      condicionEmpresa === "Responsable Inscripto" &&
+      condicionCliente === "Responsable Inscripto"
+    ) {
       return "A";
     }
 
     return "B";
   };
-
   useEffect(() => {
-    if (!empresa) return;
+    if (!empresa || !clienteSeleccionado) return;
 
-    setLetraComprobante(obtenerLetraComprobante());
-  }, [empresa, tipoComprobante, clienteSeleccionado]);
+    const letra = obtenerLetraComprobante(tipoComprobante, clienteSeleccionado);
+    setLetraComprobante(letra);
+  }, [tipoComprobante, clienteSeleccionado, empresa]);
 
   const seleccionarArticulo = (articulo) => {
     if (!articulo) return;
@@ -368,7 +386,10 @@ export default function Factura() {
         fecha,
         idcliente: clienteId,
         tipo_comprobante: tipoComprobante,
-        letra_comprobante: obtenerLetraComprobante(),
+        letra_comprobante: obtenerLetraComprobante(
+          tipoComprobante,
+          clienteSeleccionado,
+        ),
         forma_pago: formaPago,
         medio_pago: formaPago === "Contado" ? medioPago : null,
         observaciones: observaciones || "",
@@ -450,19 +471,32 @@ export default function Factura() {
 
       const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
-      const empresaPdf = respuestaFiscal.factura.empresas || empresa;
+      const empresaPdf = empresa || respuestaFiscal.factura.empresas;
 
+      const { data: empresaCompleta, error: errorEmpresa } = await supabase
+        .from("empresas")
+        .select(
+          `
+    *,
+    ciudades!empresas_idciudad_fkey(nombre)
+  `,
+        )
+        .eq("id", idEmpresa)
+        .single();
+
+      if (errorEmpresa) {
+        console.log("Error cargando empresa completa:", errorEmpresa);
+      }
       const datosPdfFiscal = {
         empresa: {
-          ...empresaPdf,
-          localidad:
-            empresaPdf?.ciudades?.nombre || empresa?.ciudades?.nombre || "-",
+          ...empresaCompleta,
+          localidad: empresaCompleta?.ciudades?.nombre || "-",
         },
         numeroFactura: respuestaFiscal.afip.numeroFiscal,
         fecha: respuestaFiscal.factura.fecha,
         tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
         letraComprobante:
-          empresaPdf?.condicion_iva === "Monotributista"
+          empresaCompleta?.condicion_iva === "Monotributista"
             ? "C"
             : respuestaFiscal.factura.letra_comprobante,
         formaPago: respuestaFiscal.factura.forma_pago,
@@ -480,6 +514,8 @@ export default function Factura() {
 
       setPdfData(datosPdfFiscal);
       setGenerarPdfPendiente(true);
+      console.log("EMPRESA:", empresa);
+      console.log("EMPRESA PDF:", empresaPdf);
 
       await supabase
         .from("empresas")
@@ -670,28 +706,67 @@ export default function Factura() {
       >
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 5 }}>
-            <TextField
-              select
-              label="Cliente"
-              fullWidth
+            <Autocomplete
               size="small"
-              value={clienteId}
-              onChange={(e) => {
-                manejarCliente(e.target.value);
+              options={clientes}
+              value={
+                clientes.find((c) => String(c.id) === String(clienteId)) || null
+              }
+              getOptionLabel={(option) => option?.nombre || ""}
+              isOptionEqualToValue={(option, value) =>
+                String(option.id) === String(value.id)
+              }
+              filterOptions={(options, { inputValue }) => {
+                const texto = inputValue.toLowerCase().trim();
+                const textoSinGuiones = texto.replace(/-/g, "");
+
+                return options.filter((c) => {
+                  const nombre = (c.nombre || "").toLowerCase();
+                  const cuit = (c.cuit || "").toLowerCase();
+                  const cuitSinGuiones = cuit.replace(/-/g, "");
+
+                  return (
+                    nombre.includes(texto) ||
+                    cuit.includes(texto) ||
+                    cuitSinGuiones.includes(textoSinGuiones)
+                  );
+                });
+              }}
+              onChange={(event, nuevoCliente) => {
+                manejarCliente(nuevoCliente?.id ? String(nuevoCliente.id) : "");
 
                 setTimeout(() => {
                   inputArticuloRef.current?.focus();
                 }, 100);
               }}
-            >
-              {clientes.map((c) => (
-                <MenuItem key={c.id} value={String(c.id)}>
-                  {c.nombre}
-                </MenuItem>
-              ))}
-            </TextField>
+              slotProps={{
+                paper: {
+                  sx: {
+                    "& .MuiAutocomplete-option": {
+                      minHeight: 36,
+                      py: 0.4,
+                      fontSize: 13,
+                    },
+                  },
+                },
+              }}
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 600 }}>
+                      {option.nombre}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11, color: "text.secondary" }}>
+                      CUIT: {option.cuit || "-"}
+                    </Typography>
+                  </Box>
+                </li>
+              )}
+              renderInput={(params) => (
+                <TextField {...params} label="Cliente" fullWidth />
+              )}
+            />
           </Grid>
-
           <Grid size={{ xs: 12, md: 2 }}>
             <TextField
               select
