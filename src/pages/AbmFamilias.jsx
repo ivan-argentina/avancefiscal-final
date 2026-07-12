@@ -17,6 +17,12 @@ import Notificaciones from "./Notificaciones";
 import { useEffect, useState } from "react";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import ConfirmDialog from "../componentes/ConfirmDialog";
+import { DataGrid } from "@mui/x-data-grid";
+import SearchIcon from "@mui/icons-material/Search";
+import EditIcon from "@mui/icons-material/Edit";
+import InputAdornment from "@mui/material/InputAdornment";
+import CircularProgress from "@mui/material/CircularProgress";
+import SaveIcon from "@mui/icons-material/Save";
 
 export default function AbmFamilias() {
   const [familias, setFamilias] = useState([]);
@@ -25,6 +31,8 @@ export default function AbmFamilias() {
   const [tipo, setTipo] = useState("success");
   const [open, setOpen] = useState(false);
   const [mensaje, setMensaje] = useState("");
+  const [buscar, setBuscar] = useState("");
+  const [guardando, setGuardando] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     titulo: "",
@@ -50,11 +58,12 @@ export default function AbmFamilias() {
       .order("nombre");
     setFamilias(data);
   }
-
+  const familiasFiltradas = familias.filter((familia) =>
+    familia.nombre?.toLowerCase().includes(buscar.toLowerCase()),
+  );
   //Cargo/Guardo Familias
-  async function guardar() {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+  async function guardar(e) {
+    e?.preventDefault();
 
     if (!nombre.trim()) {
       setMensaje("Ingrese el nombre de la familia");
@@ -63,45 +72,59 @@ export default function AbmFamilias() {
       return;
     }
 
-    let error;
+    if (guardando) return;
 
-    if (editId) {
-      const resultado = await supabase
-        .from("familias")
-        .update({ nombre: nombre.trim() })
-        .eq("id", editId)
-        .eq("idempresa", idEmpresa);
+    setGuardando(true);
 
-      error = resultado.error;
-    } else {
-      const resultado = await supabase.from("familias").insert({
-        nombre: nombre.trim(),
-        idempresa: idEmpresa,
-      });
+    try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-      error = resultado.error;
-    }
+      let error;
 
-    if (error) {
-      console.error(error);
+      if (editId !== null) {
+        const resultado = await supabase
+          .from("familias")
+          .update({ nombre: nombre.trim() })
+          .eq("id", editId)
+          .eq("idempresa", idEmpresa);
+
+        error = resultado.error;
+      } else {
+        const resultado = await supabase.from("familias").insert({
+          nombre: nombre.trim(),
+          idempresa: idEmpresa,
+          activo: true,
+        });
+
+        error = resultado.error;
+      }
+
+      if (error) {
+        throw error;
+      }
+
+      setMensaje(
+        editId !== null
+          ? "Familia actualizada correctamente"
+          : "Familia guardada correctamente",
+      );
+      setTipo("success");
+      setOpen(true);
+
+      setNombre("");
+      setEditId(null);
+
+      await cargarFamilias();
+    } catch (error) {
+      console.error("Error al guardar familia:", error);
+
       setMensaje("Error al guardar la familia");
       setTipo("error");
       setOpen(true);
-      return;
+    } finally {
+      setGuardando(false);
     }
-
-    setMensaje(
-      editId
-        ? "Familia actualizada correctamente"
-        : "Familia guardada correctamente",
-    );
-    setTipo("success");
-    setOpen(true);
-
-    setNombre("");
-    setEditId(null);
-
-    await cargarFamilias();
   }
 
   async function eliminar(id) {
@@ -166,10 +189,63 @@ export default function AbmFamilias() {
     await cargarFamilias();
   }
 
-  function editar(f) {
-    setNombre(f.nombre);
-    setEditId(editId.id);
+  function editar(familia) {
+    if (!familia) return;
+    setEditId(familia.id);
+    setNombre(familia.nombre);
   }
+  const columnas = [
+    {
+      field: "nombre",
+      headerName: "Familia",
+      flex: 1,
+      minWidth: 250,
+    },
+    {
+      field: "editar",
+      headerName: "",
+      width: 70,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <IconButton
+          color="primary"
+          size="small"
+          onClick={() => editar(params.row)}
+          title="Modificar familia"
+        >
+          <EditIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+    {
+      field: "eliminar",
+      headerName: "",
+      width: 70,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <IconButton
+          color="error"
+          size="small"
+          onClick={() =>
+            setConfirmDialog({
+              open: true,
+              titulo: "Eliminar familia",
+              mensaje:
+                "Si la familia tiene artículos asociados será desactivada. Si no tiene artículos, será eliminada definitivamente. ¿Deseás continuar?",
+              textoConfirmar: "Aceptar",
+              color: "error",
+              accion: () => eliminar(params.row.id),
+            })
+          }
+          title="Eliminar familia"
+        >
+          <DeleteIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ];
   return (
     <Container maxWidth="sm">
       <Typography variant="h4" sx={{ mt: 4, mb: 3 }}>
@@ -192,8 +268,23 @@ export default function AbmFamilias() {
           onChange={(e) => setNombre(e.target.value)}
         />
 
-        <Button variant="contained" onClick={guardar}>
-          {editId ? "Actualizar" : "Agregar"}
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={guardando}
+          startIcon={
+            guardando ? (
+              <CircularProgress size={18} color="inherit" />
+            ) : (
+              <SaveIcon />
+            )
+          }
+        >
+          {guardando
+            ? "Guardando..."
+            : editId !== null
+              ? "Actualizar"
+              : "Agregar"}
         </Button>
       </Box>
 
@@ -205,37 +296,59 @@ export default function AbmFamilias() {
           mt: 2,
         }}
       >
-        <List>
-          {familias.map((f, index) => (
-            <Box key={f.id}>
-              <ListItem
-                secondaryAction={
-                  <IconButton
-                    edge="end"
-                    color="error"
-                    onClick={() =>
-                      setConfirmDialog({
-                        open: true,
-                        titulo: "Eliminar familia",
-                        mensaje:
-                          "Si la familia tiene artículos asociados será desactivada. Si no tiene artículos, será eliminada definitivamente. ¿Deseás continuar?",
-                        textoConfirmar: "Aceptar",
-                        color: "error",
-                        accion: () => eliminar(params.row.id),
-                      })
-                    }
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                }
-              >
-                <ListItemText primary={f.nombre} />
-              </ListItem>
+        <TextField
+          label="Buscar familia"
+          size="small"
+          fullWidth
+          value={buscar}
+          onChange={(e) => setBuscar(e.target.value)}
+          sx={{ mb: 1 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+          }}
+        />
 
-              {index < familias.length - 1 && <Divider />}
-            </Box>
-          ))}
-        </List>
+        <Box sx={{ height: 430, width: "100%" }}>
+          <DataGrid
+            rows={familiasFiltradas}
+            columns={columnas}
+            getRowId={(row) => row.id}
+            rowHeight={38}
+            density="compact"
+            initialState={{
+              pagination: {
+                paginationModel: {
+                  pageSize: 50,
+                  page: 0,
+                },
+              },
+            }}
+            pageSizeOptions={[20, 50, 100]}
+            disableRowSelectionOnClick
+            sx={{
+              backgroundColor: "#fff",
+              borderRadius: 2,
+              "& .MuiDataGrid-cell": {
+                py: 0.5,
+                fontSize: 12,
+                display: "flex",
+                alignItems: "center",
+              },
+              "& .MuiDataGrid-columnHeaderTitle": {
+                fontWeight: 700,
+              },
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "#f3f3f3",
+                fontSize: 13,
+                fontWeight: 700,
+              },
+            }}
+          />
+        </Box>
       </Paper>
       <ConfirmDialog
         open={confirmDialog.open}

@@ -24,6 +24,7 @@ import ResumenCliente from "./ResumenClientes";
 import ResumenProveedores from "./ResumenProveedores";
 import AbmProveedores from "./AbmProveedores";
 import Compra from "./Compra";
+import Configuracion from "./Configuracion";
 import { useNavigate } from "react-router-dom";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import AbmEmpresas from "./AbmEmpresas";
@@ -31,6 +32,7 @@ import AbmUsuarios from "./AbmUsuarios";
 import ImportarDatos from "./ImportarDatos";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { supabase } from "../hook/supabaseClient";
 
 const drawerWidth = 200;
@@ -537,6 +539,49 @@ export default function InicioFactu() {
             <ListItemText primary="Importar Datos" />
           </ListItemButton>
           <ListItemButton
+            component={Link}
+            to="/configuracion"
+            selected={location.pathname === "/configuracion"}
+            sx={{
+              color: "white",
+              transition: "all 0.25s ease",
+              position: "relative",
+
+              "&::before": {
+                content: '""',
+                position: "absolute",
+                left: 0,
+                top: 0,
+                height: "100%",
+                width: "4px",
+                backgroundColor: "transparent",
+                transition: "all 0.25s ease",
+              },
+
+              "&:hover::before": {
+                backgroundColor: "#fff",
+              },
+
+              "&:hover": {
+                backgroundColor: "#1565c0",
+                transform: "translateX(6px)",
+              },
+
+              "&.Mui-selected": {
+                backgroundColor: "#0d47a1",
+              },
+            }}
+          >
+            <ListItemIcon sx={{ color: "white", minWidth: 40 }}>
+              <SettingsIcon />
+            </ListItemIcon>
+
+            <ListItemText
+              primary="Configuración"
+              primaryTypographyProps={{ color: "white" }}
+            />
+          </ListItemButton>
+          <ListItemButton
             onClick={cerrarSesion}
             sx={{
               color: "white",
@@ -584,6 +629,7 @@ export default function InicioFactu() {
             <Route path="/usuarios" element={<AbmUsuarios />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/importar-datos" element={<ImportarDatos />} />
+            <Route path="/configuracion" element={<Configuracion />} />
           </Routes>
         </Box>
       </Box>

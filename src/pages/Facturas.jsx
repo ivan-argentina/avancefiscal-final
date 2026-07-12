@@ -13,6 +13,7 @@ import { Resend } from "resend";
 import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import Tooltip from "@mui/material/Tooltip";
+import { imprimirTicketFactura } from "../utils/imprimirTicketFactura";
 
 import {
   Box,
@@ -162,6 +163,7 @@ export default function Facturas() {
       ingresos_brutos,
       inicio_actividades,
       logo_url,
+      tipo_impresion,
       ciudades!empresas_idciudad_fkey(nombre)
     ),
 
@@ -241,123 +243,343 @@ export default function Facturas() {
   };
 
   const descargarPdfFactura = async (factura, modo = "descargar") => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
-    const { data: empresaData } = await supabase
-      .from("empresas")
-      .select(
-        `
+      if (!usuarioGuardado?.id) {
+        console.log("No hay usuario logueado");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        console.log("No se encontró la empresa del usuario");
+        return;
+      }
+
+      /*
+       * CARGAR EMPRESA Y CONFIGURACIÓN DE IMPRESIÓN
+       */
+      const { data: empresaData, error: errorEmpresa } = await supabase
+        .from("empresas")
+        .select(
+          `
         *,
         ciudades!empresas_idciudad_fkey(nombre)
         `,
-      )
+        )
+        .eq("id", idEmpresa)
+        .single();
 
-      .eq("id", idEmpresa)
-      .single();
+      if (errorEmpresa || !empresaData) {
+        console.log("Error al cargar la empresa:", errorEmpresa);
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("detalle_factura")
-      .select(
-        `
-      id,
-      cantidad,
-      precio,
-      subtotal,
-      descripcion,
-      articulos(descripcion)
-    `,
-      )
-      .eq("idfactura", factura.id)
-      .eq("idempresa", idEmpresa);
+      /*
+       * CARGAR DETALLE DEL COMPROBANTE
+       */
+      const { data, error } = await supabase
+        .from("detalle_factura")
+        .select(
+          `
+        id,
+        idarticulo,
+        cantidad,
+        precio,
+        subtotal,
+        descripcion,
+        articulos(descripcion)
+        `,
+        )
+        .eq("idfactura", factura.id)
+        .eq("idempresa", idEmpresa);
 
-    if (error) {
-      console.log("Error al cargar detalle para PDF:", error);
-      return;
-    }
+      if (error) {
+        console.log("Error al cargar detalle para impresión:", error);
+        return;
+      }
 
-    const detalleFormateado = (data || []).map((item) => ({
-      id: item.id,
-      articulo: item?.articulos?.descripcion || item.descripcion || "-",
-      cantidad: item.cantidad,
-      precio: item.precio,
-      subtotal: item.subtotal,
-    }));
-    console.log("CLIENTE PDF:", {
-      ...factura.clientes,
-      condicion_iva:
-        factura.clientes?.condicion_iva?.descripcion ||
-        factura.clientes?.condicion_iva ||
-        "Consumidor Final",
-    });
+      /*
+       * FORMATEAR DETALLE
+       *
+       * Se incluyen varios nombres para que el mismo detalle
+       * funcione tanto en el PDF como en la comandera.
+       */
+      const detalleFormateado = (data || []).map((item) => {
+        const descripcion =
+          item?.articulos?.descripcion || item.descripcion || "-";
 
-    setPdfData({
-      empresa: {
+        return {
+          id: item.id,
+          idarticulo: item.idarticulo,
+          articulo: descripcion,
+          descripcion,
+          nombre: descripcion,
+          cantidad: Number(item.cantidad || 0),
+          precio: Number(item.precio || 0),
+          subtotal: Number(item.subtotal || 0),
+        };
+      });
+
+      /*
+       * FORMATEAR EMPRESA
+       */
+      const empresaFormateada = {
         ...empresaData,
         localidad: empresaData?.ciudades?.nombre || "-",
-      },
-      numeroFactura: factura.numero_fiscal,
-      fecha: factura.fecha,
-      tipoComprobante: factura.tipo_comprobante,
-      letraComprobante: factura.letra_comprobante || "C",
-      formaPago: factura.forma_pago,
-      clienteSeleccionado: {
+        ciudad: empresaData?.ciudades?.nombre || "-",
+      };
+
+      /*
+       * FORMATEAR CLIENTE
+       */
+      const clienteFormateado = {
         ...factura.clientes,
+
+        localidad: factura.clientes?.ciudades?.nombre || "",
+        ciudad: factura.clientes?.ciudades?.nombre || "",
+
         condicion_iva:
           factura.clientes?.condicion_iva?.descripcion ||
           factura.clientes?.condicion_iva ||
           "Consumidor Final",
-      },
-      detalle: detalleFormateado,
-      totalFactura: factura.total,
+      };
 
-      neto:
-        factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
-          ? Number((factura.total / 1.21).toFixed(2))
-          : factura.total,
+      /*
+       * TIPO DE IMPRESIÓN CONFIGURADO EN LA EMPRESA
+       *
+       * Valores esperados:
+       * - comandera
+       * - laser
+       */
+      const tipoImpresion = String(empresaData?.tipo_impresion || "laser")
+        .trim()
+        .toLowerCase();
 
-      iva:
-        factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
-          ? Number((factura.total - factura.total / 1.21).toFixed(2))
-          : 0,
+      /*
+       * REIMPRESIÓN POR COMANDERA
+       *
+       * Solo se usa la comandera cuando se presiona imprimir/descargar.
+       * Para enviar por email siempre se genera el PDF.
+       */
+      if (modo !== "email" && tipoImpresion === "comandera") {
+        const totalFactura = Number(factura.total || 0);
 
-      observaciones: factura.observaciones,
-      puntoVenta: factura.punto_venta,
-      cae: factura.cae,
-      vencimientoCae: factura.cae_vencimiento,
-      numeroOrigen: factura.numero_origen,
-    });
+        const esFacturaConIva =
+          factura.letra_comprobante === "A" ||
+          factura.letra_comprobante === "B";
 
-    const nombreComprobante =
-      factura.tipo_comprobante === "nota_de_credito"
-        ? "nota-credito"
-        : "factura";
+        const neto = esFacturaConIva
+          ? Number((totalFactura / 1.21).toFixed(2))
+          : totalFactura;
 
-    const nombrePdf = `${nombreComprobante}-${factura.letra_comprobante || "C"}-${String(
-      factura.punto_venta || 1,
-    ).padStart(4, "0")}-${String(
-      factura.numero_fiscal || factura.numero || 0,
-    ).padStart(8, "0")}.pdf`;
+        const iva = esFacturaConIva
+          ? Number((totalFactura - totalFactura / 1.21).toFixed(2))
+          : 0;
 
-    if (modo === "email") {
-      setEmailPendiente({
-        to: factura.clientes?.email,
-        filename: nombrePdf,
-        subject: `Factura ${factura.letra_comprobante || "C"} ${String(
-          factura.punto_venta || 1,
-        ).padStart(4, "0")}-${String(
-          factura.numero_fiscal || factura.numero || 0,
-        ).padStart(8, "0")}`,
-        html: `
-      <p>Hola ${factura.clientes?.nombre || ""},</p>
-      <p>Le enviamos adjunto el comprobante correspondiente.</p>
-      <p><strong>Total:</strong> $${Number(factura.total || 0).toLocaleString("es-AR")}</p>
-      <p>Muchas gracias.</p>
-      <p><strong>${empresaData?.razon_social || "Avance Fiscal"}</strong></p>
-    `,
+        const facturaTicket = {
+          ...factura,
+
+          /*
+           * Empresa
+           */
+          empresa: empresaFormateada,
+          empresas: empresaFormateada,
+
+          /*
+           * Cliente
+           */
+          cliente: clienteFormateado,
+          clientes: clienteFormateado,
+          clienteSeleccionado: clienteFormateado,
+
+          /*
+           * Detalle
+           */
+          detalle: detalleFormateado,
+          detalle_factura: detalleFormateado,
+
+          /*
+           * Número del comprobante
+           */
+          numero: factura.numero_fiscal || factura.numero,
+          numeroFactura: factura.numero_fiscal || factura.numero,
+          numero_fiscal: factura.numero_fiscal || factura.numero,
+
+          /*
+           * Tipo y letra
+           */
+          tipoComprobante: factura.tipo_comprobante,
+          tipo_comprobante: factura.tipo_comprobante,
+
+          letraComprobante: factura.letra_comprobante || "C",
+          letra_comprobante: factura.letra_comprobante || "C",
+
+          /*
+           * Punto de venta
+           */
+          puntoVenta: factura.punto_venta || empresaData.punto_venta || 1,
+          punto_venta: factura.punto_venta || empresaData.punto_venta || 1,
+
+          /*
+           * Totales
+           */
+          total: totalFactura,
+          totalFactura,
+          subtotal: Number(factura.subtotal || neto),
+          neto,
+          iva,
+
+          /*
+           * Datos fiscales
+           */
+          cae: factura.cae,
+
+          vencimientoCae: factura.cae_vencimiento,
+          caeVencimiento: factura.cae_vencimiento,
+          cae_vencimiento: factura.cae_vencimiento,
+
+          /*
+           * Comprobante asociado para notas de crédito
+           */
+          numeroOrigen: factura.numero_origen,
+          numero_origen: factura.numero_origen,
+
+          /*
+           * Otros datos
+           */
+          fecha: factura.fecha,
+          formaPago: factura.forma_pago,
+          forma_pago: factura.forma_pago,
+          observaciones: factura.observaciones,
+        };
+
+        await imprimirTicketFactura(facturaTicket);
+        return;
+      }
+
+      /*
+       * REIMPRESIÓN LÁSER / PDF
+       */
+      console.log("CLIENTE PDF:", clienteFormateado);
+
+      const totalFactura = Number(factura.total || 0);
+
+      const esFacturaConIva =
+        factura.letra_comprobante === "A" || factura.letra_comprobante === "B";
+
+      const neto = esFacturaConIva
+        ? Number((totalFactura / 1.21).toFixed(2))
+        : totalFactura;
+
+      const iva = esFacturaConIva
+        ? Number((totalFactura - totalFactura / 1.21).toFixed(2))
+        : 0;
+
+      setPdfData({
+        empresa: empresaFormateada,
+
+        numeroFactura: factura.numero_fiscal || factura.numero,
+
+        fecha: factura.fecha,
+
+        tipoComprobante: factura.tipo_comprobante,
+
+        letraComprobante: factura.letra_comprobante || "C",
+
+        formaPago: factura.forma_pago,
+
+        clienteSeleccionado: clienteFormateado,
+
+        detalle: detalleFormateado,
+
+        totalFactura,
+
+        neto,
+
+        iva,
+
+        observaciones: factura.observaciones,
+
+        puntoVenta: factura.punto_venta || empresaData.punto_venta || 1,
+
+        cae: factura.cae,
+
+        vencimientoCae: factura.cae_vencimiento,
+
+        numeroOrigen: factura.numero_origen,
       });
-    } else {
-      setPdfNombre(nombrePdf);
+
+      /*
+       * NOMBRE DEL ARCHIVO PDF
+       */
+      const nombreComprobante =
+        factura.tipo_comprobante === "nota_de_credito"
+          ? "nota-credito"
+          : "factura";
+
+      const nombrePdf =
+        `${nombreComprobante}-` +
+        `${factura.letra_comprobante || "C"}-` +
+        `${String(factura.punto_venta || empresaData.punto_venta || 1).padStart(
+          4,
+          "0",
+        )}-` +
+        `${String(factura.numero_fiscal || factura.numero || 0).padStart(
+          8,
+          "0",
+        )}.pdf`;
+
+      /*
+       * ENVÍO POR EMAIL
+       *
+       * Aunque la empresa use comandera, el email se envía como PDF.
+       */
+      if (modo === "email") {
+        setEmailPendiente({
+          to: factura.clientes?.email,
+
+          filename: nombrePdf,
+
+          subject:
+            `Factura ${factura.letra_comprobante || "C"} ` +
+            `${String(
+              factura.punto_venta || empresaData.punto_venta || 1,
+            ).padStart(4, "0")}-` +
+            `${String(factura.numero_fiscal || factura.numero || 0).padStart(
+              8,
+              "0",
+            )}`,
+
+          html: `
+          <p>Hola ${factura.clientes?.nombre || ""},</p>
+
+          <p>
+            Le enviamos adjunto el comprobante correspondiente.
+          </p>
+
+          <p>
+            <strong>Total:</strong>
+            $${totalFactura.toLocaleString("es-AR")}
+          </p>
+
+          <p>Muchas gracias.</p>
+
+          <p>
+            <strong>
+              ${empresaData?.razon_social || "Avance Fiscal"}
+            </strong>
+          </p>
+        `,
+        });
+      } else {
+        setPdfNombre(nombrePdf);
+      }
+    } catch (error) {
+      console.log("Error al reimprimir el comprobante:", error);
+      alert(error?.message || "Ocurrió un error al reimprimir el comprobante.");
     }
   };
   useEffect(() => {

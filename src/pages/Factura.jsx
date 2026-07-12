@@ -23,6 +23,7 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import GenerarPdf from "../componentes/GenerarPdf";
 import { generarpdfU } from "../utils/generarpdfu";
 import ModalImagen from "../componentes/ModalImagen";
+import { imprimirTicketFactura } from "../utils/imprimirTicketFactura";
 
 export default function Factura() {
   const [clientes, setClientes] = useState([]);
@@ -57,6 +58,17 @@ export default function Factura() {
   const [idFacturaOrigen, setIdFacturaOrigen] = useState(null);
   const [numeroFacturaOrigen, setNumeroFacturaOrigen] = useState(null);
   const [guardando, setGuardando] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [tipo, setTipo] = useState("success");
+  const [open, setOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    textoConfirmar: "Aceptar",
+    color: "primary",
+    accion: null,
+  });
 
   const inputArticuloRef = useRef(null);
   const facturaPdfRef = useRef(null);
@@ -98,26 +110,44 @@ export default function Factura() {
 
   useEffect(() => {
     if (!generarPdfPendiente || !pdfData) return;
+    console.log("TIPO IMPRESIÓN:", pdfData.tipoImpresion);
+    console.log("EMPRESA PDF:", pdfData.empresa);
+    const timer = setTimeout(async () => {
+      try {
+        if (pdfData.tipoImpresion === "comandera") {
+          await imprimirTicketFactura(pdfData);
+          setGenerarPdfPendiente(false);
+          return;
+        }
 
-    const timer = setTimeout(() => {
-      if (!facturaPdfRef.current) {
-        console.log("Todavía no está listo el PDF");
-        return;
+        if (!facturaPdfRef.current) {
+          console.log("Todavía no está listo el PDF");
+          return;
+        }
+
+        const nombreComprobante =
+          pdfData.tipoComprobante === "nota_de_credito"
+            ? "nota-credito"
+            : "factura";
+
+        generarpdfU(
+          facturaPdfRef.current,
+          `${nombreComprobante}-${String(pdfData.puntoVenta).padStart(
+            4,
+            "0",
+          )}-${String(pdfData.numeroFactura).padStart(8, "0")}.pdf`,
+        );
+
+        setGenerarPdfPendiente(false);
+      } catch (error) {
+        console.error("Error al imprimir:", error);
+
+        setMensaje("Error al imprimir el comprobante");
+        setTipo("error");
+        setOpen(true);
+
+        setGenerarPdfPendiente(false);
       }
-
-      const nombreComprobante =
-        pdfData.tipoComprobante === "nota_de_credito"
-          ? "nota-credito"
-          : "factura";
-
-      generarpdfU(
-        facturaPdfRef.current,
-        `${nombreComprobante}-${String(pdfData.puntoVenta).padStart(4, "0")}-${String(
-          pdfData.numeroFactura,
-        ).padStart(8, "0")}.pdf`,
-      );
-
-      setGenerarPdfPendiente(false);
     }, 800);
 
     return () => clearTimeout(timer);
@@ -492,6 +522,7 @@ export default function Factura() {
           ...empresaCompleta,
           localidad: empresaCompleta?.ciudades?.nombre || "-",
         },
+        tipoImpresion: empresaCompleta?.tipo_impresion || "laser",
         numeroFactura: respuestaFiscal.afip.numeroFiscal,
         fecha: respuestaFiscal.factura.fecha,
         tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
@@ -514,8 +545,6 @@ export default function Factura() {
 
       setPdfData(datosPdfFiscal);
       setGenerarPdfPendiente(true);
-      console.log("EMPRESA:", empresa);
-      console.log("EMPRESA PDF:", empresaPdf);
 
       await supabase
         .from("empresas")
