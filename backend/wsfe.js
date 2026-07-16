@@ -1,16 +1,61 @@
 import soap from "soap";
 import { obtenerTokenSign } from "./wsaa.js";
 
-const WSFE_URL = "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL";
+const WSFE_URLS = {
+  homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx?WSDL",
 
-export const obtenerUltimoComprobante = async ({
+  produccion: "https://servicios1.afip.gov.ar/wsfev1/service.asmx?WSDL",
+};
+
+/*
+ * Devuelve homologacion o produccion.
+ * Cualquier valor desconocido cae en homologación por seguridad.
+ */
+const normalizarAmbiente = (ambienteFiscal) => {
+  const ambiente = String(ambienteFiscal || "")
+    .trim()
+    .toLowerCase();
+
+  return ambiente === "produccion" ? "produccion" : "homologacion";
+};
+
+/*
+ * Obtiene el TA y crea el cliente WSFE correspondiente
+ * al ambiente configurado en la empresa.
+ */
+const obtenerClienteWsfe = async (cuit) => {
+  const auth = await obtenerTokenSign(cuit);
+
+  const ambienteFiscal = normalizarAmbiente(auth?.ambienteFiscal);
+
+  const wsfeUrl = WSFE_URLS[ambienteFiscal];
+
+  console.log("CONECTANDO A WSFE:", {
+    cuit,
+    ambienteFiscal,
+    wsfeUrl,
+  });
+
+  const client = await soap.createClientAsync(wsfeUrl);
+
+  return {
+    client,
+    auth,
+    ambienteFiscal,
+  };
+};
+
+/*
+ * Consulta interna del último comprobante usando
+ * un cliente y un TA ya obtenidos.
+ */
+const consultarUltimoComprobante = async ({
+  client,
+  auth,
   cuit,
   puntoVenta,
   tipoComprobante,
 }) => {
-  const auth = await obtenerTokenSign(cuit);
-  const client = await soap.createClientAsync(WSFE_URL);
-
   const [result] = await client.FECompUltimoAutorizadoAsync({
     Auth: {
       Token: auth.token,
@@ -21,7 +66,41 @@ export const obtenerUltimoComprobante = async ({
     CbteTipo: Number(tipoComprobante),
   });
 
-  return result.FECompUltimoAutorizadoResult;
+  const respuesta = result?.FECompUltimoAutorizadoResult;
+
+  if (!respuesta) {
+    throw new Error("ARCA no devolvió el último comprobante autorizado");
+  }
+
+  if (respuesta?.Errors?.Err) {
+    const errores = Array.isArray(respuesta.Errors.Err)
+      ? respuesta.Errors.Err
+      : [respuesta.Errors.Err];
+
+    const mensaje = errores
+      .map((error) => `${error?.Code || ""} - ${error?.Msg || "Error de ARCA"}`)
+      .join(" | ");
+
+    throw new Error(mensaje);
+  }
+
+  return respuesta;
+};
+
+export const obtenerUltimoComprobante = async ({
+  cuit,
+  puntoVenta,
+  tipoComprobante,
+}) => {
+  const { client, auth } = await obtenerClienteWsfe(cuit);
+
+  return consultarUltimoComprobante({
+    client,
+    auth,
+    cuit,
+    puntoVenta,
+    tipoComprobante,
+  });
 };
 
 export const autorizarFactura = async ({
@@ -39,6 +118,9 @@ export const autorizarFactura = async ({
   comprobanteAsociadoPtoVta,
   comprobanteAsociadoNumero,
 }) => {
+  /*
+   * DETERMINAR TIPO DE COMPROBANTE ARCA
+   */
   let tipoComprobanteAfip;
 
   if (letraComprobante === "A") {
@@ -48,6 +130,7 @@ export const autorizarFactura = async ({
   } else {
     tipoComprobanteAfip = tipoComprobante === "nota_de_credito" ? 13 : 11;
   }
+
   const condicionIVAReceptorIdFinal =
     letraComprobante === "A" ? 1 : Number(condicionIVAReceptorId);
 
@@ -57,6 +140,9 @@ export const autorizarFactura = async ({
     tipoComprobanteAfip,
   });
 
+  /*
+   * VALIDAR NOTA DE CRÉDITO
+   */
   if (
     tipoComprobante === "nota_de_credito" &&
     !Number(comprobanteAsociadoNumero)
@@ -66,22 +152,41 @@ export const autorizarFactura = async ({
     );
   }
 
-  const auth = await obtenerTokenSign(cuit);
-  const client = await soap.createClientAsync(WSFE_URL);
+  /*
+   * OBTENER CLIENTE Y TA SEGÚN EL AMBIENTE
+   */
+  const { client, auth, ambienteFiscal } = await obtenerClienteWsfe(cuit);
 
-  const ultimo = await obtenerUltimoComprobante({
+  /*
+   * CONSULTAR ÚLTIMO NÚMERO
+   *
+   * Se reutilizan el mismo cliente y el mismo TA,
+   * evitando autenticar dos veces.
+   */
+  const ultimo = await consultarUltimoComprobante({
+    client,
+    auth,
     cuit,
     puntoVenta,
     tipoComprobante: tipoComprobanteAfip,
   });
 
-  const proximoNumero = Number(ultimo.CbteNro || 0) + 1;
-  console.log("ULTIMO AFIP COMPLETO:", JSON.stringify(ultimo, null, 2));
-  console.log("ULTIMO CBTE NRO:", ultimo?.CbteNro);
-  console.log("PROXIMO NUMERO CALCULADO:", proximoNumero);
+  const proximoNumero = Number(ultimo?.CbteNro || 0) + 1;
 
+  console.log("ÚLTIMO AFIP COMPLETO:", JSON.stringify(ultimo, null, 2));
+
+  console.log("ÚLTIMO CBTE NRO:", ultimo?.CbteNro);
+
+  console.log("PRÓXIMO NÚMERO CALCULADO:", proximoNumero);
+
+  /*
+   * FECHA DEL COMPROBANTE
+   */
   const fecha = new Date().toISOString().slice(0, 10).replaceAll("-", "");
 
+  /*
+   * COMPROBANTE ASOCIADO PARA NOTA DE CRÉDITO
+   */
   const datosAsociados =
     tipoComprobante === "nota_de_credito"
       ? {
@@ -94,14 +199,20 @@ export const autorizarFactura = async ({
           },
         }
       : {};
+
+  /*
+   * CÁLCULO DE NETO E IVA
+   */
   const esFacturaConIva = letraComprobante === "A" || letraComprobante === "B";
 
+  const totalFinal = Number(total || 0);
+
   const netoFinal = esFacturaConIva
-    ? Number((Number(total) / 1.21).toFixed(2))
-    : Number(total);
+    ? Number((totalFinal / 1.21).toFixed(2))
+    : totalFinal;
 
   const ivaFinal = esFacturaConIva
-    ? Number((Number(total) - netoFinal).toFixed(2))
+    ? Number((totalFinal - netoFinal).toFixed(2))
     : 0;
 
   const datosIva = esFacturaConIva
@@ -115,14 +226,18 @@ export const autorizarFactura = async ({
         },
       }
     : {};
+
   console.log(
-    "Enviando a AFIP:",
+    "ENVIANDO A ARCA:",
     JSON.stringify(
       {
+        ambienteFiscal,
         tipoComprobanteAfip,
-        total,
-        neto,
-        iva,
+        total: totalFinal,
+        netoRecibido: neto,
+        ivaRecibido: iva,
+        netoFinal,
+        ivaFinal,
         docTipo,
         docNro,
         proximoNumero,
@@ -135,11 +250,16 @@ export const autorizarFactura = async ({
   );
 
   console.log("ENVIANDO COMPROBANTE:", {
+    ambienteFiscal,
     CbteTipo: tipoComprobanteAfip,
     PtoVta: Number(puntoVenta),
-    CbteDesde: Number(proximoNumero),
-    CbteHasta: Number(proximoNumero),
+    CbteDesde: proximoNumero,
+    CbteHasta: proximoNumero,
   });
+
+  /*
+   * SOLICITAR CAE
+   */
   const [result] = await client.FECAESolicitarAsync({
     Auth: {
       Token: auth.token,
@@ -157,20 +277,26 @@ export const autorizarFactura = async ({
       FeDetReq: {
         FECAEDetRequest: {
           Concepto: 1,
+
           DocTipo: Number(docTipo || 99),
           DocNro: Number(docNro || 0),
+
           CbteDesde: proximoNumero,
           CbteHasta: proximoNumero,
           CbteFch: fecha,
-          ImpTotal: Number(total),
+
+          ImpTotal: totalFinal,
           ImpTotConc: 0,
           ImpNeto: netoFinal,
           ImpOpEx: 0,
           ImpTrib: 0,
           ImpIVA: ivaFinal,
+
           MonId: "PES",
           MonCotiz: 1,
+
           CondicionIVAReceptorId: condicionIVAReceptorIdFinal,
+
           ...datosIva,
           ...datosAsociados,
         },
@@ -178,7 +304,15 @@ export const autorizarFactura = async ({
     },
   });
 
-  console.log("RESPUESTA AFIP:", JSON.stringify(result, null, 2));
-  console.log("CONDICION IVA RECEPTOR FINAL:", condicionIVAReceptorIdFinal);
-  return result.FECAESolicitarResult;
+  console.log("RESPUESTA ARCA:", JSON.stringify(result, null, 2));
+
+  console.log("CONDICIÓN IVA RECEPTOR FINAL:", condicionIVAReceptorIdFinal);
+
+  const respuesta = result?.FECAESolicitarResult;
+
+  if (!respuesta) {
+    throw new Error("ARCA no devolvió una respuesta al solicitar el CAE");
+  }
+
+  return respuesta;
 };
