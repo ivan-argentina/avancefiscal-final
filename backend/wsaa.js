@@ -241,12 +241,7 @@ export const obtenerTokenSign = async (cuitEmpresa) => {
 
   const cms = forge.util.encode64(forge.asn1.toDer(p7.toAsn1()).getBytes());
 
-  /*
-   * Crear cliente utilizando la URL del ambiente configurado.
-   */
-  const ambiente = empresa.ambiente_fiscal || "homologacion";
-
-  const client = await soap.createClientAsync(WSFE_URLS[ambiente]);
+  const client = await soap.createClientAsync(wsaaUrl);
 
   let result;
 
