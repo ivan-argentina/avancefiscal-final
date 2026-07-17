@@ -10,6 +10,8 @@ import {
   IconButton,
   MenuItem,
 } from "@mui/material";
+import BlockIcon from "@mui/icons-material/Block";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Chip from "@mui/material/Chip";
 import { DataGrid } from "@mui/x-data-grid";
 import { validarCuit } from "../utils/validarCuit";
@@ -41,6 +43,8 @@ export default function AbmEmpresas() {
   const [certificadoKey, setCertificadoKey] = useState("");
   const [ingresosBrutos, setIngresosBrutos] = useState("");
   const [inicioActividades, setInicioActividades] = useState("");
+  const [puntoVenta, setPuntoVenta] = useState("");
+  const [ambienteFiscal, setAmbienteFiscal] = useState("homologacion");
 
   const handleCuitChange = (e) => {
     const valor = e.target.value.replace(/\D/g, "");
@@ -58,19 +62,22 @@ export default function AbmEmpresas() {
   };
 
   const cargarCiudades = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
     const { data, error } = await supabase
       .from("ciudades")
-      .select("*")
-      .eq("idempresa", idEmpresa)
-      .order("nombre");
-    console.log("CIUDADES:", data);
-    console.log("TIPO:", typeof data);
-    if (!error) {
-      setCiudades(data || []);
+      .select("id, nombre, idempresa, activo")
+      .eq("activo", true)
+      .order("nombre", { ascending: true });
+
+    console.log("CIUDADES CARGADAS:", data);
+    console.log("ERROR CIUDADES:", error);
+
+    if (error) {
+      console.error("Error al cargar ciudades:", error);
+      setCiudades([]);
+      return;
     }
+
+    setCiudades(data || []);
   };
 
   useEffect(() => {
@@ -107,12 +114,52 @@ export default function AbmEmpresas() {
     setCategoriaMonotributo("");
     setEditandoId(null);
     setActivo(true);
+    setPuntoVenta("");
+    setAmbienteFiscal("homologacion");
+    setArchivoCertificado(null);
+    setArchivoKey(null);
+    setCertificadoVencimiento("");
     setCertificadoCrt("");
     setCertificadoKey("");
+
     setIngresosBrutos("");
     setInicioActividades("");
+    setErrorCuit("");
   };
   const guardarEmpresa = async () => {
+    const razonSocialLimpia = String(razonSocial || "").trim();
+    const cuitLimpio = String(cuit || "").replace(/\D/g, "");
+
+    if (!razonSocialLimpia) {
+      alert("Ingresá la razón social");
+      return;
+    }
+
+    if (cuitLimpio.length !== 11 || !validarCuit(cuitLimpio)) {
+      alert("Ingresá un CUIT válido");
+      return;
+    }
+
+    if (!direccion.trim()) {
+      alert("Ingresá la dirección");
+      return;
+    }
+
+    if (!idCiudad) {
+      alert("Seleccioná una ciudad");
+      return;
+    }
+
+    if (!condicionIva) {
+      alert("Seleccioná la condición de IVA");
+      return;
+    }
+
+    if (condicionIva === "Monotributista" && !categoriaMonotributo) {
+      alert("Seleccioná la categoría de Monotributo");
+      return;
+    }
+
     //Cargo los certificados
     let rutaCertificado = null;
     let rutaKey = null;
@@ -141,21 +188,25 @@ export default function AbmEmpresas() {
       if (error) throw error;
     }
     //***Hasta Aca */
-    console.log("RUTA CERTIFICADO:", rutaCertificado);
-    console.log("RUTA KEY:", rutaKey);
     const payload = {
-      razon_social: razonSocial.trim(),
-      nombre_fantasia: nombreFantacia.trim(),
-      cuit: cuit.trim(),
-      telefono: telefono.trim(),
-      email: email.trim(),
-      direccion: direccion.trim(),
-      activo: activo,
+      razon_social: razonSocialLimpia,
+      nombre_fantasia: String(nombreFantacia || "").trim(),
+      cuit: cuitLimpio,
+      telefono: String(telefono || "").trim(),
+      email: String(email || "").trim(),
+      direccion: String(direccion || "").trim(),
+      punto_venta: Number(puntoVenta || 0),
+      ambiente_fiscal: ambienteFiscal,
+      idciudad: idCiudad ? Number(idCiudad) : null,
+      activo,
       condicion_iva: condicionIva,
+
       categoria_monotributo:
         condicionIva === "Monotributista" ? categoriaMonotributo : null,
-      ingresos_brutos: ingresosBrutos,
+
+      ingresos_brutos: String(ingresosBrutos || "").trim(),
       inicio_actividades: inicioActividades || null,
+      certificado_vencimiento: certificadoVencimiento || null,
     };
     if (rutaCertificado) {
       payload.certificado_crt = rutaCertificado;
@@ -192,6 +243,7 @@ export default function AbmEmpresas() {
     limpiarFormulario();
     await cargarEmpresas();
   };
+
   const editarEmpresa = (empresa) => {
     setEditandoId(empresa.id);
     setRazonSocial(empresa.razon_social || "");
@@ -200,9 +252,11 @@ export default function AbmEmpresas() {
     setTelefono(empresa.telefono || "");
     setEmail(empresa.email || "");
     setDireccion(empresa.direccion || "");
-    setIdCiudad(empresa.idciudad || "");
+    setIdCiudad(empresa.idciudad ?? "");
     setCondicionIva(empresa.condicion_iva || "");
     setCategoriaMonotributo(empresa.categoria_monotributo || "");
+    setPuntoVenta(empresa.punto_venta || "");
+    setAmbienteFiscal(empresa.ambiente_fiscal || "homologacion");
     setActivo(empresa.activo ?? true);
     setArchivoCertificado(null);
     setArchivoKey(null);
@@ -211,8 +265,35 @@ export default function AbmEmpresas() {
     setCertificadoKey(empresa.certificado_key || "");
     setIngresosBrutos(empresa.ingresos_brutos || "");
     setInicioActividades(empresa.inicio_actividades || "");
+    console.log("EMPRESA EDITADA:", empresa);
+    console.log("ID CIUDAD GUARDADO:", empresa.idciudad);
   };
 
+  const cambiarEstadoEmpresa = async (empresa) => {
+    const nuevoEstado = !empresa.activo;
+
+    const mensaje = nuevoEstado
+      ? "¿Deseás activar nuevamente esta empresa?"
+      : "¿Deseás desactivar esta empresa?";
+
+    if (!window.confirm(mensaje)) return;
+
+    const { error } = await supabase
+      .from("empresas")
+      .update({
+        activo: nuevoEstado,
+      })
+      .eq("id", empresa.id);
+
+    if (error) {
+      console.error("Error al cambiar estado de la empresa:", error);
+      alert("No se pudo cambiar el estado de la empresa");
+      return;
+    }
+
+    await cargarEmpresas();
+  };
+  //Veriricar creo que hay que borrar eliminarEmpresa
   const eliminarEmpresa = async (id) => {
     if (!confirm("Eliminar Empresa")) return;
 
@@ -242,8 +323,9 @@ export default function AbmEmpresas() {
             <EditIcon />
           </IconButton>
           <IconButton
-            onClick={() => eliminarEmpresa(params.row.id)}
-            color="error"
+            onClick={() => cambiarEstadoEmpresa(params.row)}
+            color={params.row.activo ? "error" : "success"}
+            title={params.row.activo ? "Desactivar empresa" : "Activar empresa"}
           >
             <DeleteIcon />
           </IconButton>
@@ -322,12 +404,13 @@ export default function AbmEmpresas() {
               fullWidth
               size="small"
             >
-              {Array.isArray(ciudades) &&
-                ciudades.map((c) => (
-                  <MenuItem key={c.id} value={c.id}>
-                    {c.nombre}
-                  </MenuItem>
-                ))}
+              <MenuItem value="">Seleccione una ciudad</MenuItem>
+
+              {ciudades.map((ciudad) => (
+                <MenuItem key={ciudad.id} value={ciudad.id}>
+                  {ciudad.nombre}
+                </MenuItem>
+              ))}
             </TextField>
           </Grid>
           <Grid size={{ xs: 12, md: 2 }}>
@@ -425,58 +508,103 @@ export default function AbmEmpresas() {
             </TextField>
           </Grid>
           <Grid size={{ xs: 12 }}>
-            <Typography variant="subtitel1" fontWeight={700} sx={{ mt: 1 }}>
-              Configuracion Afip
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 1 }}>
+              Configuración AFIP
             </Typography>
           </Grid>
-          <Grid size={{ xs: 12, md: 2 }}>
-            <Button component="label" variant="outlined" fullWidth size="small">
-              Subir certificado (.crt)
-              <input
-                hidden
-                type="file"
-                accept=".crt,.cer,.pem"
-                onChange={(e) => setArchivoCertificado(e.target.files[0])}
+
+          <Grid container spacing={2} size={{ xs: 12 }}>
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                label="Punto de Venta"
+                type="number"
+                fullWidth
+                size="small"
+                value={puntoVenta}
+                onChange={(e) => setPuntoVenta(e.target.value)}
               />
-            </Button>
-          </Grid>
+            </Grid>
 
-          <Grid size={{ xs: 12, md: 2 }}>
-            <Button component="label" variant="outlined" fullWidth size="small">
-              Subir clave privada (.key)
-              <input
-                hidden
-                type="file"
-                accept=".key,.pem"
-                onChange={(e) => setArchivoKey(e.target.files[0])}
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                select
+                label="Ambiente"
+                fullWidth
+                size="small"
+                value={ambienteFiscal}
+                onChange={(e) => setAmbienteFiscal(e.target.value)}
+              >
+                <MenuItem value="homologacion">Homologación</MenuItem>
+                <MenuItem value="produccion">Producción</MenuItem>
+              </TextField>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 2 }}>
+              <Button
+                component="label"
+                variant="outlined"
+                fullWidth
+                size="small"
+                sx={{ height: 40 }}
+              >
+                Subir certificado (.crt)
+                <input
+                  hidden
+                  type="file"
+                  accept=".crt,.cer,.pem"
+                  onChange={(e) => setArchivoCertificado(e.target.files[0])}
+                />
+              </Button>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 2 }}>
+              <Button
+                component="label"
+                variant="outlined"
+                fullWidth
+                size="small"
+                sx={{ height: 40 }}
+              >
+                Subir clave privada (.key)
+                <input
+                  hidden
+                  type="file"
+                  accept=".key,.pem"
+                  onChange={(e) => setArchivoKey(e.target.files[0])}
+                />
+              </Button>
+            </Grid>
+
+            <Grid size={{ xs: 12, md: 2 }}>
+              <TextField
+                label="Vencimiento certificado"
+                type="date"
+                value={certificadoVencimiento}
+                onChange={(e) => setCertificadoVencimiento(e.target.value)}
+                fullWidth
+                size="small"
+                slotProps={{
+                  inputLabel: { shrink: true },
+                }}
               />
-            </Button>
+            </Grid>
           </Grid>
 
-          <Grid size={{ xs: 12, md: 2 }}>
-            <TextField
-              label="Vencimiento certificado"
-              type="date"
-              value={certificadoVencimiento}
-              onChange={(e) => setCertificadoVencimiento(e.target.value)}
-              fullWidth
-              size="small"
-              slotProps={{
-                inputLabel: { shrink: true },
-              }}
-            />
-          </Grid>
-          {certificadoCrt && (
-            <Typography variant="caption" color="success.main">
-              ✓ Certificado cargado
-            </Typography>
-          )}
+          <Grid size={{ xs: 12 }}>
+            <Box sx={{ display: "flex", gap: 2, mt: 1 }}>
+              {certificadoCrt && (
+                <Typography variant="caption" color="success.main">
+                  ✓ Certificado cargado
+                </Typography>
+              )}
 
-          {certificadoKey && (
-            <Typography variant="caption" color="success.main">
-              ✓ Clave privada cargada
-            </Typography>
-          )}
+              {certificadoKey && (
+                <Typography variant="caption" color="success.main">
+                  ✓ Clave privada cargada
+                </Typography>
+              )}
+            </Box>
+          </Grid>
           <Grid
             size={{ xs: 12 }}
             sx={{

@@ -103,12 +103,18 @@ export default function GraficoVentasDiarias({ idEmpresa }) {
   return (
     <Card
       sx={{
-        height: 320,
+        width: "100%",
+        height: "100%",
+        minHeight: 360,
         borderRadius: 3,
         boxShadow: "0 4px 14px rgba(0,0,0,0.08)",
       }}
     >
-      <CardContent sx={{ height: "100%" }}>
+      <CardContent
+        sx={{
+          flex: 1,
+        }}
+      >
         <Box sx={{ mb: 2 }}>
           <Typography variant="h6" fontWeight="bold">
             Ventas diarias
@@ -126,7 +132,7 @@ export default function GraficoVentasDiarias({ idEmpresa }) {
             <MenuItem value={999}>Este mes</MenuItem>
           </Select>
         </FormControl>
-        <Box sx={{ height: 230 }}>
+        <Box sx={{ height: 320, width: "100%" }}>
           <Bar
             data={{
               labels: datos.labels,

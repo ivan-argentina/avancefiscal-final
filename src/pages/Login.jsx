@@ -36,6 +36,7 @@ export default function Login() {
       return;
     }
 
+    console.log("Usuario logueado:", usuario);
     localStorage.setItem("usuario", JSON.stringify(usuario));
 
     navigate("/dashboard");

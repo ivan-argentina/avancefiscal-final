@@ -25,6 +25,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import CloseIcon from "@mui/icons-material/Close";
 import PrintIcon from "@mui/icons-material/Print";
+import Notificaciones from "./Notificaciones";
 
 import { DataGrid } from "@mui/x-data-grid";
 import { supabase } from "../hook/supabaseClient";
@@ -53,6 +54,9 @@ export default function ResumenClientes() {
   const [detalleFactura, setDetalleFactura] = useState([]);
   const [facturaSeleccionada, setFacturaSeleccionada] = useState(null);
   const [openDetalle, setOpenDetalle] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [open, setOpen] = useState("");
 
   const [openPago, setOpenPago] = useState(false);
   const [facturasPendientes, setFacturasPendientes] = useState([]);
@@ -95,7 +99,6 @@ export default function ResumenClientes() {
 
   const facturasFiltradas = (facturas || []).filter((factura) => {
     const saldo = Number(factura?.saldo || 0);
-    console.log("Factura", factura);
 
     if (filtroFacturas === "conSaldo") {
       return saldo > 0;
@@ -398,7 +401,9 @@ export default function ResumenClientes() {
       setObservaciones("");
       setFacturasPendientes([]);
 
-      alert("Pago guardado correctamente");
+      setMensaje("Pago guardado correctamente");
+      setTipo("success");
+      setOpen(true);
     } catch (error) {
       console.log("Error al guardar pago:", error);
       setError(error?.message || error?.details || "Error al guardar el pago.");
@@ -1155,6 +1160,12 @@ export default function ResumenClientes() {
           puntoVenta={pdfData.puntoVenta}
         />
       </Box>
+      <Notificaciones
+        open={open}
+        mensaje={mensaje}
+        tipo={tipo}
+        onClose={() => setOpen(false)}
+      />
     </Box>
   );
 }

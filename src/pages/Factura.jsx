@@ -24,6 +24,7 @@ import GenerarPdf from "../componentes/GenerarPdf";
 import { generarpdfU } from "../utils/generarpdfu";
 import ModalImagen from "../componentes/ModalImagen";
 import { imprimirTicketFactura } from "../utils/imprimirTicketFactura";
+import { API_URL } from "../config";
 
 export default function Factura() {
   const [clientes, setClientes] = useState([]);
@@ -84,26 +85,43 @@ export default function Factura() {
 
         if (!usuario?.id) return;
 
+        const idEmpresa = await obtenerEmpresa(usuario.id);
+
+        if (!idEmpresa) {
+          console.log("No hay una empresa activa seleccionada");
+          setEmpresa(null);
+          return;
+        }
+
         const { data, error } = await supabase
-          .from("usuario_empresa")
+          .from("empresas")
           .select(
             `
-            empresas(
-            *,
-             ciudades!empresas_idciudad_fkey(nombre)
-            )
-            `,
+        *,
+        ciudades!empresas_idciudad_fkey(nombre)
+      `,
           )
-          .eq("idusuario", usuario.id)
-          .single();
+          .eq("id", idEmpresa)
+          .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+          throw error;
+        }
 
-        setEmpresa(data.empresas);
+        if (!data) {
+          console.log("No se encontró la empresa activa");
+          setEmpresa(null);
+          return;
+        }
+
+        setEmpresa(data);
       } catch (error) {
         console.log("Error cargando empresa en factura:", error);
+        setEmpresa(null);
       }
     };
+
+    cargarEmpresa();
 
     cargarEmpresa();
   }, []);
@@ -471,18 +489,15 @@ export default function Factura() {
         return;
       }
       //Factura Electronica
-      const responseFiscal = await fetch(
-        "https://gestion-production-e3f6.up.railway.app/api/fiscal/autorizar",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            idFactura: facturaId,
-          }),
+      const responseFiscal = await fetch(`${API_URL}/api/fiscal/autorizar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      );
+        body: JSON.stringify({
+          idFactura: facturaId,
+        }),
+      });
 
       const respuestaFiscal = await responseFiscal.json();
 

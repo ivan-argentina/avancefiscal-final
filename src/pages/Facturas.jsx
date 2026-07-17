@@ -14,6 +14,7 @@ import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import Tooltip from "@mui/material/Tooltip";
 import { imprimirTicketFactura } from "../utils/imprimirTicketFactura";
+import { API_URL } from "../config";
 
 import {
   Box,
@@ -68,18 +69,15 @@ export default function Facturas() {
   };
 
   const autorizarFacturaPendiente = async (factura) => {
-    const response = await fetch(
-      "https://gestion-production-e3f6.up.railway.app/api/fiscal/autorizar",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idFactura: factura.id,
-        }),
+    const response = await fetch(`${API_URL}/api/fiscal/autorizar`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify({
+        idFactura: factura.id,
+      }),
+    });
 
     const data = await response.json();
     const detallePdf = data.fiscal.detalle.map((item, index) => ({
@@ -100,10 +98,7 @@ export default function Facturas() {
 
     await cargarFacturas();
   };
-
   const enviarWhatsAppFactura = async (factura) => {
-    // Genera y descarga el PDF
-    await descargarPdfFactura(factura);
     const telefono = factura.clientes?.telefono?.replace(/\D/g, "");
 
     if (!telefono) {
@@ -111,7 +106,14 @@ export default function Facturas() {
       return;
     }
 
-    const mensaje = `Hola ${factura.clientes?.nombre}, te enviamos la factura N° ${factura.numero_fiscal}.`;
+    // Para WhatsApp siempre generamos el PDF,
+    // aunque la empresa use comandera.
+    await descargarPdfFactura(factura, "whatsapp");
+
+    const mensaje =
+      `Hola ${factura.clientes?.nombre || ""}, ` +
+      `te enviamos la factura N° ${factura.numero_fiscal || factura.numero}. ` +
+      `El archivo PDF se descargó en tu computadora para que puedas adjuntarlo.`;
 
     window.open(
       `https://wa.me/54${telefono}?text=${encodeURIComponent(mensaje)}`,
@@ -364,7 +366,11 @@ export default function Facturas() {
        * Solo se usa la comandera cuando se presiona imprimir/descargar.
        * Para enviar por email siempre se genera el PDF.
        */
-      if (modo !== "email" && tipoImpresion === "comandera") {
+      if (
+        modo !== "email" &&
+        modo !== "whatsapp" &&
+        tipoImpresion === "comandera"
+      ) {
         const totalFactura = Number(factura.total || 0);
 
         const esFacturaConIva =

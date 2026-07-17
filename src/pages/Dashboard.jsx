@@ -23,8 +23,9 @@ import TopClientes from "../componentes/dashboard/TopClientes";
 import StockBajo from "../componentes/dashboard/StockBajo";
 import AlertasDashboard from "../componentes/dashboard/AlertasDashboard";
 import KpiBar from "../componentes/dashboard/KpiBar";
+import { API_URL } from "../config";
 
-const API_URL = "https://gestion-production-e3f6.up.railway.app";
+fetch(`${API_URL}/api/fiscal/certificado`);
 
 export default function Dashboard() {
   const [empresa, setEmpresa] = useState(null);
@@ -34,6 +35,11 @@ export default function Dashboard() {
     ventasMes: 0,
     saldoCobrar: 0,
     comprobantesMes: 0,
+    pendientesAfip: 0,
+    stockBajo: 0,
+    stockNegativo: 0,
+    clientes: 0,
+    articulos: 0,
   });
   const [monotributo, setMonotributo] = useState({
     condicionIva: "",
@@ -43,39 +49,38 @@ export default function Dashboard() {
     disponible: 0,
     porcentaje: 0,
   });
-  const [tipoImpresora, setTipoImpresora] = useState(
-    localStorage.getItem("tipoImpresora") || "comandera",
-  );
 
-  const cambiarTipoImpresora = (valor) => {
-    setTipoImpresora(valor);
-    localStorage.setItem("tipoImpresora", valor);
-  };
   const cargarEmpresa = async () => {
-    try {
-      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-      if (!usuarioGuardado?.id) return;
-
-      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-      setIdEmpresa(idEmpresa);
-
-      const { data, error } = await supabase
-        .from("empresas")
-        .select("*")
-        .eq("id", idEmpresa)
-        .single();
-
-      if (error) {
-        console.log("Error cargando empresa:", error);
-        return;
-      }
-
-      setEmpresa(data);
-    } catch (error) {
-      console.error(error);
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      setEmpresa(null);
+      setIdEmpresa(null);
+      return;
     }
+
+    setIdEmpresa(idEmpresa);
+
+    const { data, error } = await supabase
+      .from("empresas")
+      .select("*")
+      .eq("id", idEmpresa)
+      .maybeSingle();
+
+    if (error) {
+      console.log("Error cargando empresa:", error);
+      setEmpresa(null);
+      return;
+    }
+
+    if (!data) {
+      console.log("No se encontró la empresa activa");
+      setEmpresa(null);
+      return;
+    }
+
+    setEmpresa(data);
   };
 
   const cargarResumen = async () => {
@@ -170,118 +175,209 @@ export default function Dashboard() {
       stockNegativo,
     });
   };
+
   const cargarMonotributo = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
-    const { data: empresa, error: errorEmpresa } = await supabase
-      .from("empresas")
-      .select("condicion_iva, categoria_monotributo")
-      .eq("id", idEmpresa)
-      .maybeSingle();
-
-    if (errorEmpresa) {
-      console.log("Error empresa monotributo:", errorEmpresa);
-      return;
-    }
-
-    if (empresa?.condicion_iva !== "Monotributista") {
-      return;
-    }
-
-    const { data: categoria, error: errorCategoria } = await supabase
-      .from("categorias_monotributo")
-      .select("limite_facturacion")
-      .eq("categoria", empresa.categoria_monotributo?.trim().toUpperCase())
-      .order("vigente_desde", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const { data, error } = await supabase
-      .from("categorias_monotributo")
-      .select("*");
-
-    if (errorCategoria) {
-      console.log("Error categoría monotributo:", errorCategoria);
-      return;
-    }
-
-    const hoy = new Date();
-    const desde12Meses = new Date(hoy);
-    desde12Meses.setFullYear(hoy.getFullYear() - 1);
-
-    const desde = desde12Meses.toISOString().slice(0, 10);
-    const hasta = hoy.toISOString().slice(0, 10);
-
-    const { data: facturas, error: errorFacturas } = await supabase
-      .from("facturas")
-      .select("total, tipo_comprobante, estado_fiscal, fecha")
-      .eq("idempresa", idEmpresa)
-      .eq("estado_fiscal", "autorizada")
-      .gte("fecha", desde)
-      .lte("fecha", hasta);
-
-    if (errorFacturas) {
-      console.log("Error facturas monotributo:", errorFacturas);
-      return;
-    }
-
-    const facturado12Meses = (facturas || []).reduce((acc, f) => {
-      const total = Number(f.total || 0);
-
-      if (f.tipo_comprobante === "nota_de_credito") {
-        return acc - total;
+      if (!usuarioGuardado?.id) {
+        console.log("No hay usuario logueado");
+        return;
       }
 
-      return acc + total;
-    }, 0);
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-    const limite = Number(categoria?.limite_facturacion || 0);
-    const porcentaje = limite ? (facturado12Meses / limite) * 100 : 0;
-    const disponible = limite - facturado12Meses;
+      if (!idEmpresa) {
+        console.log("No se encontró la empresa");
+        return;
+      }
 
-    setMonotributo({
-      condicionIva: empresa.condicion_iva,
-      categoria: empresa.categoria_monotributo,
-      limite,
-      facturado12Meses,
-      disponible,
-      porcentaje,
-    });
+      /*
+       * CARGAR EMPRESA
+       */
+      const { data: empresa, error: errorEmpresa } = await supabase
+        .from("empresas")
+        .select("condicion_iva, categoria_monotributo")
+        .eq("id", idEmpresa)
+        .maybeSingle();
+
+      if (errorEmpresa) {
+        console.log("Error empresa monotributo:", errorEmpresa);
+        return;
+      }
+
+      if (empresa?.condicion_iva !== "Monotributista") {
+        setMonotributo(null);
+        return;
+      }
+
+      const categoriaEmpresa = String(empresa?.categoria_monotributo || "")
+        .trim()
+        .toUpperCase();
+
+      if (!categoriaEmpresa) {
+        console.log("La empresa no tiene categoría de monotributo cargada");
+        setMonotributo(null);
+        return;
+      }
+
+      console.log("CATEGORÍA EMPRESA:", categoriaEmpresa);
+
+      /*
+       * CARGAR ÚLTIMO LÍMITE DE LA CATEGORÍA
+       */
+      const { data: categoria, error: errorCategoria } = await supabase
+        .from("categorias_monotributo")
+        .select("categoria, limite_facturacion, vigente_desde")
+        .eq("categoria", categoriaEmpresa)
+        .lte("vigente_desde", new Date().toISOString().slice(0, 10))
+        .order("vigente_desde", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (errorCategoria) {
+        console.log("Error categoría monotributo:", errorCategoria);
+        return;
+      }
+
+      if (!categoria) {
+        console.log(
+          `No se encontró la categoría ${categoriaEmpresa} en categorias_monotributo`,
+        );
+        setMonotributo(null);
+        return;
+      }
+
+      const limite = Number(categoria.limite_facturacion || 0);
+
+      if (limite <= 0) {
+        console.log("El límite de facturación no es válido:", categoria);
+        setMonotributo(null);
+        return;
+      }
+
+      /*
+       * RANGO DE LOS ÚLTIMOS 12 MESES
+       */
+      const hoy = new Date();
+      const desde12Meses = new Date(hoy);
+      desde12Meses.setFullYear(hoy.getFullYear() - 1);
+
+      const desde = desde12Meses.toISOString().slice(0, 10);
+      const hasta = hoy.toISOString().slice(0, 10);
+
+      /*
+       * FACTURACIÓN AUTORIZADA
+       */
+      const { data: facturas, error: errorFacturas } = await supabase
+        .from("facturas")
+        .select("total, tipo_comprobante, estado_fiscal, fecha")
+        .eq("idempresa", idEmpresa)
+        .eq("estado_fiscal", "autorizada")
+        .gte("fecha", desde)
+        .lte("fecha", hasta);
+
+      if (errorFacturas) {
+        console.log("Error facturas monotributo:", errorFacturas);
+        return;
+      }
+
+      const facturado12Meses = (facturas || []).reduce((acumulado, factura) => {
+        const total = Number(factura.total || 0);
+
+        if (factura.tipo_comprobante === "nota_de_credito") {
+          return acumulado - total;
+        }
+
+        return acumulado + total;
+      }, 0);
+
+      const porcentaje = (facturado12Meses / limite) * 100;
+      const disponible = limite - facturado12Meses;
+
+      console.log("MONOTRIBUTO:", {
+        categoria: categoriaEmpresa,
+        limite,
+        facturado12Meses,
+        porcentaje,
+        disponible,
+      });
+
+      setMonotributo({
+        condicionIva: empresa.condicion_iva,
+        categoria: categoriaEmpresa,
+        limite,
+        facturado12Meses,
+        disponible,
+        porcentaje,
+      });
+    } catch (error) {
+      console.error("Error al cargar monotributo:", error);
+      setMonotributo(null);
+    }
   };
 
   const cargarEstadoCertificado = async () => {
     try {
       const usuario = JSON.parse(localStorage.getItem("usuario"));
 
-      if (!usuario?.id) {
-        console.log("No hay usuario logueado");
+      if (!usuario?.id) return;
+
+      let cuitEmpresa = null;
+
+      /*
+       * SUPERUSUARIO:
+       * usa la empresa seleccionada en el selector.
+       */
+      if (usuario.superusuario) {
+        const empresaActiva = JSON.parse(localStorage.getItem("empresaActiva"));
+
+        cuitEmpresa = empresaActiva?.cuit || null;
+      } else {
+        /*
+         * USUARIO NORMAL:
+         * usa su empresa asociada.
+         */
+        const { data: relacion, error } = await supabase
+          .from("usuario_empresa")
+          .select("empresas(cuit)")
+          .eq("idusuario", usuario.id)
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        cuitEmpresa = relacion?.empresas?.cuit || null;
+      }
+
+      if (!cuitEmpresa) {
+        console.log("No se encontró el CUIT de la empresa activa");
+        setCertificado(null);
         return;
       }
 
-      const { data: relacion, error } = await supabase
-        .from("usuario_empresa")
-        .select("empresas(cuit)")
-        .eq("idusuario", usuario.id)
-        .single();
-
-      if (error) throw error;
-
-      const cuitEmpresa = relacion?.empresas?.cuit;
-
-      if (!cuitEmpresa) return;
+      const cuitLimpio = String(cuitEmpresa).replace(/\D/g, "");
 
       const res = await fetch(
-        `${API_URL}/api/fiscal/certificado/estado/${cuitEmpresa}`,
+        `${API_URL}/api/fiscal/certificado/estado/${cuitLimpio}`,
       );
 
       const data = await res.json();
 
+      if (!res.ok) {
+        throw new Error(data?.error || "No se pudo consultar el certificado");
+      }
+
       if (data.ok) {
         setCertificado(data);
+      } else {
+        setCertificado(null);
       }
     } catch (error) {
       console.log("Error certificado:", error);
+      setCertificado(null);
     }
   };
 
@@ -311,37 +407,95 @@ export default function Dashboard() {
   const config = configCertificado[estadoCert];
 
   return (
-    <Box sx={{ p: 2, overflowY: "auto", height: "calc(100vh - 64px)" }}>
+    <Box
+      sx={{
+        p: 2,
+        overflowY: "auto",
+        height: "calc(100vh - 64px)",
+      }}
+    >
       <DashboardHeader empresa={empresa} />
+
       <KpiBar resumen={resumen} />
 
+      {/* TOP CLIENTES Y STOCK BAJO */}
       <Grid container spacing={3} sx={{ mt: 3 }}>
-        <Grid size={{ xs: 12, lg: 8 }}>
+        <Grid
+          size={{ xs: 12, lg: 8 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
           <TopClientes idEmpresa={idEmpresa} />
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 4 }}>
+        <Grid
+          size={{ xs: 12, lg: 4 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
           <StockBajo idEmpresa={idEmpresa} />
         </Grid>
       </Grid>
-      <Grid container spacing={3} sx={{ mt: 1 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <TarjetaMonotributo monotributo={monotributo} />
+
+      {/* MONOTRIBUTO Y ÚLTIMAS FACTURAS */}
+      <Grid container spacing={3} sx={{ mt: 3 }}>
+        <Grid
+          size={{ xs: 12, lg: 6 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
+          {monotributo && <TarjetaMonotributo monotributo={monotributo} />}
+        </Grid>
+
+        <Grid
+          size={{ xs: 12, lg: 6 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
+          <UltimasFacturas idEmpresa={idEmpresa} />
         </Grid>
       </Grid>
 
+      {/* VENTAS DIARIAS Y ALERTAS */}
       <Grid container spacing={3} sx={{ mt: 3 }}>
-        <Grid size={{ xs: 12, lg: 6 }}>
-          <UltimasFacturas idEmpresa={idEmpresa} />
+        <Grid
+          size={{ xs: 12, lg: 6 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
+          <GraficoVentasDiarias idEmpresa={idEmpresa} />
         </Grid>
 
-        <Grid size={{ xs: 12, lg: 6 }}>
+        <Grid
+          size={{ xs: 12, lg: 6 }}
+          sx={{
+            display: "flex",
+            "& > *": {
+              width: "100%",
+            },
+          }}
+        >
           <AlertasDashboard certificado={certificado} resumen={resumen} />
-        </Grid>
-        <Grid container spacing={3} sx={{ mt: 3 }}>
-          <Grid size={{ xs: 12 }}>
-            <GraficoVentasDiarias idEmpresa={idEmpresa} />
-          </Grid>
         </Grid>
       </Grid>
     </Box>

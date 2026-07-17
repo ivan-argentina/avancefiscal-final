@@ -290,7 +290,6 @@ export default function Compra() {
             stock: nuevoStock,
             precio_costo: costoNuevo,
             precio: precioVentaNuevo,
-            precio_costo: Number(item.precio),
           })
           .eq("id", item.idarticulo)
           .eq("idempresa", idEmpresa);
@@ -391,12 +390,13 @@ export default function Compra() {
           <Grid size={{ xs: 12, md: 3 }}>
             <Autocomplete
               options={proveedores}
+              value={proveedorSeleccionado}
               getOptionLabel={(option) => option?.nombre || ""}
-              value={proveedores.find((p) => p.id === proveedorId) || null}
-              onChange={(_, nuevoProveedor) => {
-                setProveedorId(nuevoProveedor ? nuevoProveedor.id : "");
-              }}
               isOptionEqualToValue={(option, value) => option.id === value.id}
+              onChange={(event, nuevoProveedor) => {
+                setProveedorSeleccionado(nuevoProveedor);
+                setProveedorId(nuevoProveedor?.id || "");
+              }}
               renderInput={(params) => (
                 <TextField
                   {...params}

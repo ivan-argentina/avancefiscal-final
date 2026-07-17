@@ -29,6 +29,7 @@ import { useNavigate } from "react-router-dom";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import AbmEmpresas from "./AbmEmpresas";
 import AbmUsuarios from "./AbmUsuarios";
+import SelectorEmpresa from "../componentes/SelectorEmpresa";
 import ImportarDatos from "./ImportarDatos";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
@@ -151,15 +152,8 @@ export default function InicioFactu() {
               Gestión
             </Box>
 
-            <Box
-              sx={{
-                fontSize: 13,
-                opacity: 0.9,
-                mt: 1,
-              }}
-            >
-              {empresaNombre}
-            </Box>
+            {/* NUEVO */}
+            {esSuperAdmin && <SelectorEmpresa />}
             {esSuperAdmin && (
               <>
                 <ListItemButton

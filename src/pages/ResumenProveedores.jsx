@@ -32,6 +32,7 @@ import GenerarPdf from "../componentes/GenerarPdf";
 
 import Tooltip from "@mui/material/Tooltip";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import Notificaciones from "./Notificaciones";
 
 export default function ResumenProveedores() {
   const [proveedores, setProveedores] = useState([]);
@@ -64,6 +65,10 @@ export default function ResumenProveedores() {
   const [guardandoPago, setGuardandoPago] = useState(false);
   const [filtroFacturas, setFiltroFacturas] = useState("conSaldo");
   const [empresa, setEmpresa] = useState(null);
+  const [proveedorId, setProveedorId] = useState("");
+  const [mensaje, setMensaje] = useState("");
+  const [tipo, setTipo] = useState("");
+  const [open, setOpen] = useState("");
 
   useEffect(() => {
     const cargarEmpresa = async () => {
@@ -88,25 +93,26 @@ export default function ResumenProveedores() {
     setObservaciones("");
     setFormaPago("Efectivo");
 
-    setComprasPendientes((prev) =>
-      prev.map((item) => ({
+    const pendientes = (facturasFiltradas || [])
+      .filter((item) => Number(item.saldo || 0) > 0)
+      .map((item) => ({
         ...item,
         pagar: "",
-      })),
-    );
+      }));
 
+    setComprasPendientes(pendientes);
     setOpenPago(true);
   };
 
   const facturasFiltradas = (compras || []).filter((factura) => {
-    const saldo = Number(factura?.saldo || 0);
+    const saldo = Number(factura.saldo || 0);
 
     if (filtroFacturas === "conSaldo") {
       return saldo > 0;
     }
 
     if (filtroFacturas === "pagadas") {
-      return saldo === 0;
+      return saldo <= 0;
     }
 
     return true;
@@ -138,7 +144,7 @@ export default function ResumenProveedores() {
 
     const { data, error } = await supabase
       .from("proveedores")
-      .select("id, nombre,direccion")
+      .select("id, nombre,direccion,telefono,email,cuit")
       .eq("idempresa", idEmpresa)
       .order("nombre", { ascending: true });
 
@@ -219,8 +225,10 @@ export default function ResumenProveedores() {
 
     setError("");
 
-    if (!proveedorSeleccionado) {
-      setError("Tenés que seleccionar un Proveedor.");
+    const idProveedorActual = proveedorSeleccionado?.id;
+
+    if (!idProveedorActual) {
+      setError("Tenés que seleccionar un proveedor.");
       return;
     }
 
@@ -236,29 +244,44 @@ export default function ResumenProveedores() {
 
     setLoadingFacturas(true);
 
-    const { data, error } = await supabase
-      .from("compras")
-      .select(
-        "id, fecha, numero_comprobante, tipo_comprobante, total, saldo, forma_pago, estado_pago, observaciones",
-      )
-      .eq("idproveedor", proveedorSeleccionado.id)
-      .eq("idempresa", idEmpresa)
-      .gte("fecha", fechaDesde)
-      .lte("fecha", fechaHasta)
-      .order("fecha", { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from("compras")
+        .select(
+          `
+        id,
+        fecha,
+        numero_comprobante,
+        tipo_comprobante,
+        total,
+        saldo,
+        forma_pago,
+        estado_pago,
+        observaciones
+        `,
+        )
+        .eq("idproveedor", idProveedorActual)
+        .eq("idempresa", idEmpresa)
+        .gte("fecha", fechaDesde)
+        .lte("fecha", fechaHasta)
+        .order("fecha", { ascending: true });
 
-    if (error) {
-      console.log("Error al buscar facturas:", error);
+      if (error) {
+        throw error;
+      }
+
+      setCompras(data || []);
+
+      await cargarPagos(idProveedorActual);
+    } catch (error) {
+      console.error("Error al buscar facturas:", error);
+
       setError("No se pudieron cargar las facturas.");
       setCompras([]);
       setPagos([]);
+    } finally {
       setLoadingFacturas(false);
-      return;
     }
-
-    setCompras(data || []);
-    await cargarPagos(proveedorSeleccionado.id);
-    setLoadingFacturas(false);
   };
 
   const aplicarPagoAutomatico = () => {
@@ -304,8 +327,10 @@ export default function ResumenProveedores() {
   );
 
   const guardarPago = async () => {
-    if (!idProveedor) {
-      setError("Tenés que seleccionar un Proveedor.");
+    const idProveedorActual = proveedorSeleccionado?.id;
+
+    if (!idProveedorActual) {
+      setError("Tenés que seleccionar un proveedor.");
       return;
     }
 
@@ -316,8 +341,8 @@ export default function ResumenProveedores() {
       return;
     }
 
-    const detallesAplicados = comprasPendientes.filter(
-      (f) => Number(f.pagar || 0) > 0,
+    const detallesAplicados = (comprasPendientes || []).filter(
+      (item) => Number(item.pagar || 0) > 0,
     );
 
     if (detallesAplicados.length === 0) {
@@ -325,52 +350,88 @@ export default function ResumenProveedores() {
       return;
     }
 
-    if (totalAplicado > recibido) {
+    const totalAplicadoActual = detallesAplicados.reduce(
+      (total, item) => total + Number(item.pagar || 0),
+      0,
+    );
+
+    if (totalAplicadoActual > recibido) {
       setError("El total aplicado no puede ser mayor al importe recibido.");
       return;
     }
 
     setGuardandoPago(true);
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     setError("");
 
     try {
+      const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+      if (!usuarioGuardado?.id) {
+        throw new Error("No se encontró el usuario logueado.");
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        throw new Error("No se encontró la empresa del usuario.");
+      }
+
+      /*
+       * GUARDAR ENCABEZADO DEL PAGO
+       */
       const { data: pagoCreado, error: errorPago } = await supabase
         .from("pago_proveedores")
         .insert([
           {
             fecha: new Date().toISOString().split("T")[0],
-            idproveedor: idProveedor,
+            idproveedor: idProveedorActual,
             importe: recibido,
             forma_pago: formaPago,
             observaciones: observaciones || "",
-            idempresa: idEmpresa || "",
+            idempresa: idEmpresa,
             idusuario: usuarioGuardado.id,
           },
         ])
         .select()
         .single();
 
-      if (errorPago) throw errorPago;
+      if (errorPago) {
+        console.error("ERROR ENCABEZADO PAGO:", errorPago);
+        throw errorPago;
+      }
 
+      /*
+       * GUARDAR APLICACIONES DEL PAGO
+       */
       const detalleInsert = detallesAplicados.map((item) => ({
         idpago: pagoCreado.id,
         idfactura: item.id,
         importe_aplicado: Number(item.pagar || 0),
-        idproveedor: idProveedor,
+        idproveedor: idProveedorActual,
+        idempresa: idEmpresa,
       }));
 
       const { error: errorDetalle } = await supabase
         .from("detalle_pagos_proveedores")
         .insert(detalleInsert);
 
-      if (errorDetalle) throw errorDetalle;
+      if (errorDetalle) {
+        console.error("ERROR DETALLE PAGO:", errorDetalle);
+        throw errorDetalle;
+      }
 
+      /*
+       * ACTUALIZAR SALDOS DE LAS COMPRAS
+       */
       for (const item of detallesAplicados) {
-        const nuevoSaldo = Number(item.saldo || 0) - Number(item.pagar || 0);
+        const saldoAnterior = Number(item.saldo || 0);
+        const importeAplicado = Number(item.pagar || 0);
 
-        const { error: errorFactura } = await supabase
+        const nuevoSaldo = Number(
+          Math.max(0, saldoAnterior - importeAplicado).toFixed(2),
+        );
+
+        const { error: errorCompra } = await supabase
           .from("compras")
           .update({
             saldo: nuevoSaldo,
@@ -379,25 +440,37 @@ export default function ResumenProveedores() {
           .eq("id", item.id)
           .eq("idempresa", idEmpresa);
 
-        if (errorFactura) throw errorFactura;
+        if (errorCompra) {
+          console.error("ERROR ACTUALIZANDO COMPRA:", errorCompra);
+          throw errorCompra;
+        }
       }
 
-      await cargarComprasPendientes(idProveedor);
-      await cargarPagos(idProveedor);
+      /*
+       * RECARGAR INFORMACIÓN
+       */
+      await cargarComprasPendientes(idProveedorActual);
+      await cargarPagos(idProveedorActual);
 
       if (proveedorSeleccionado && fechaDesde && fechaHasta) {
         await buscarResumen();
       }
 
+      /*
+       * LIMPIAR MODAL
+       */
       setOpenPago(false);
       setImporteRecibido("");
       setFormaPago("Efectivo");
       setObservaciones("");
-      setFacturasPendientes([]);
+      setComprasPendientes([]);
 
-      alert("Pago guardado correctamente");
+      setMensaje("Pago guardado correctamente");
+      setTipo("success");
+      setOpen(true);
     } catch (error) {
-      console.log("Error al guardar pago:", error);
+      console.error("Error al guardar pago:", error);
+
       setError(error?.message || error?.details || "Error al guardar el pago.");
     } finally {
       setGuardandoPago(false);
@@ -416,9 +489,10 @@ export default function ResumenProveedores() {
     setError("");
   };
 
-  const totalDeuda = useMemo(() => {
-    return facturas.reduce((acc, item) => acc + Number(item.saldo || 0), 0);
-  }, [facturas]);
+  const totalDeuda = facturasFiltradas.reduce(
+    (total, factura) => total + Number(factura.saldo || 0),
+    0,
+  );
 
   const columnas = [
     {
@@ -644,19 +718,57 @@ export default function ResumenProveedores() {
           <Grid size={{ xs: 12, md: 3 }}>
             <Autocomplete
               options={proveedores}
-              loading={loadingProveedor}
               value={proveedorSeleccionado}
-              onChange={(event, newValue) => {
-                setProveedorSeleccionado(newValue || null);
-                setIdProveedor(newValue?.id || "");
-                setPagos([]);
-                setCompras([]);
-              }}
               getOptionLabel={(option) => option?.nombre || ""}
               isOptionEqualToValue={(option, value) => option.id === value.id}
-              renderInput={(params) => (
-                <TextField {...params} label="Proveedores" fullWidth />
+              filterOptions={(options, state) => {
+                const texto = String(state.inputValue || "")
+                  .toLowerCase()
+                  .trim();
+
+                const textoNumerico = texto.replace(/\D/g, "");
+
+                return options.filter((proveedor) => {
+                  const nombre = String(proveedor.nombre || "").toLowerCase();
+
+                  const cuitOriginal = String(
+                    proveedor.cuit || "",
+                  ).toLowerCase();
+
+                  const cuitNumerico = cuitOriginal.replace(/\D/g, "");
+
+                  return (
+                    nombre.includes(texto) ||
+                    cuitOriginal.includes(texto) ||
+                    cuitNumerico.includes(textoNumerico)
+                  );
+                });
+              }}
+              onChange={(event, nuevoProveedor) => {
+                setProveedorSeleccionado(nuevoProveedor);
+                setProveedorId(nuevoProveedor?.id || "");
+              }}
+              renderOption={(props, option) => (
+                <li {...props} key={option.id}>
+                  <Box>
+                    <Typography variant="body2">{option.nombre}</Typography>
+
+                    <Typography variant="caption" color="text.secondary">
+                      CUIT: {option.cuit || "Sin CUIT"}
+                    </Typography>
+                  </Box>
+                </li>
               )}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Proveedor"
+                  size="small"
+                  fullWidth
+                  placeholder="Buscar por nombre o CUIT"
+                />
+              )}
+              noOptionsText="No se encontraron proveedores"
             />
           </Grid>
 
@@ -717,7 +829,11 @@ export default function ResumenProveedores() {
                 variant="contained"
                 color="success"
                 onClick={abrirModalPago}
-                disabled={!idProveedor}
+                disabled={
+                  !proveedorSeleccionado ||
+                  facturasFiltradas.length === 0 ||
+                  totalDeuda <= 0
+                }
                 fullWidth
                 startIcon={<SearchIcon />}
                 sx={{
@@ -773,7 +889,7 @@ export default function ResumenProveedores() {
               <Grid size={{ xs: 12, sm: 4 }}>
                 <Paper sx={{ p: 2, borderRadius: 2 }}>
                   <Typography variant="subtitle1" fontWeight="bold">
-                    Cantidad de facturas: {facturas.length}
+                    Cantidad de facturas: {facturasFiltradas.length}
                   </Typography>
                 </Paper>
               </Grid>
@@ -1050,6 +1166,12 @@ export default function ResumenProveedores() {
           backgroundColor: "#fff",
         }}
       ></Box>
+      <Notificaciones
+        open={open}
+        mensaje={mensaje}
+        tipo={tipo}
+        onClose={() => setOpen(false)}
+      />
     </Box>
   );
 }
