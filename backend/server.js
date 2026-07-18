@@ -327,56 +327,96 @@ app.get("/api/fiscal/condiciones-iva", async (req, res) => {
     });
   }
 });
-app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
-  try {
-    const { cuitEmpresa } = req.params;
+app.get(
+  "/api/fiscal/certificado/estado/:cuitEmpresa",
+  async (req, res) => {
+    try {
+      const cuitBuscado = String(
+        req.params.cuitEmpresa || "",
+      ).replace(/\D/g, "");
 
-    const { data: empresa, error } = await supabase
-      .from("empresas")
-      .select("certificado_crt")
-      .eq("cuit", String(cuitEmpresa))
-      .single();
+      const { data: empresas, error } = await supabase
+        .from("empresas")
+        .select("id, razon_social, cuit, certificado_crt");
 
-    if (error) throw error;
+      if (error) {
+        throw error;
+      }
 
-    const { data: certFile, error: certError } = await supabase.storage
-      .from("afip-certificados")
-      .download(empresa.certificado_crt);
+      const empresa = (empresas || []).find(
+        (item) =>
+          String(item.cuit || "").replace(/\D/g, "") ===
+          cuitBuscado,
+      );
 
-    if (certError) throw certError;
+      if (!empresa) {
+        return res.status(404).json({
+          ok: false,
+          error: "No se encontró la empresa para ese CUIT",
+        });
+      }
 
-    const certPem = Buffer.from(await certFile.arrayBuffer()).toString("utf8");
+      if (!empresa.certificado_crt) {
+        return res.status(200).json({
+          ok: true,
+          estado: "sin_certificado",
+          vence: null,
+          diasRestantes: null,
+        });
+      }
 
-    const cert = forge.pki.certificateFromPem(certPem);
+      const { data: certFile, error: certError } =
+        await supabase.storage
+          .from("afip-certificados")
+          .download(empresa.certificado_crt);
 
-    const vence = cert.validity.notAfter;
-    const hoy = new Date();
+      if (certError) {
+        throw certError;
+      }
 
-    const diasRestantes = Math.ceil(
-      (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
-    );
+      const certPem = Buffer.from(
+        await certFile.arrayBuffer(),
+      ).toString("utf8");
 
-    let estado = "vigente";
+      const cert = forge.pki.certificateFromPem(certPem);
 
-    if (diasRestantes <= 0) {
-      estado = "vencido";
-    } else if (diasRestantes <= 30) {
-      estado = "por_vencer";
+      const vence = cert.validity.notAfter;
+      const hoy = new Date();
+
+      const diasRestantes = Math.ceil(
+        (vence.getTime() - hoy.getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+
+      let estado = "vigente";
+
+      if (diasRestantes <= 0) {
+        estado = "vencido";
+      } else if (diasRestantes <= 30) {
+        estado = "por_vencer";
+      }
+
+      return res.json({
+        ok: true,
+        estado,
+        vence,
+        diasRestantes,
+      });
+    } catch (error) {
+      console.error(
+        "Error consultando estado del certificado:",
+        error,
+      );
+
+      return res.status(500).json({
+        ok: false,
+        error:
+          error?.message ||
+          "No se pudo consultar el certificado",
+      });
     }
-
-    res.json({
-      ok: true,
-      estado,
-      vence,
-      diasRestantes,
-    });
-  } catch (error) {
-    res.status(500).json({
-      ok: false,
-      error: error.message,
-    });
-  }
-});
+  },
+);
 
 app.post("/api/email/factura", async (req, res) => {
   try {
