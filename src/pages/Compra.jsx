@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 
@@ -23,6 +23,8 @@ import {
   Typography,
   Button,
   CircularProgress,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 
 import { DataGrid } from "@mui/x-data-grid";
@@ -66,120 +68,201 @@ export default function Compra() {
     return detalle.reduce((acc, item) => acc + Number(item.subtotal || 0), 0);
   }, [detalle]);
 
+  const mostrarNotificacion = useCallback((mensaje, tipo) => {
+    setMensaje(mensaje);
+    setTipo(tipo);
+    setOpen(true);
+  }, []);
   const formatoNumero = (valor) =>
-    new Intl.NumberFormat("es-AR").format(Number(valor || 0));
+    new Intl.NumberFormat("es-AR", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(valor ?? 0));
 
-  const cargarProveedores = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+  const cargarProveedores = useCallback(async () => {
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-    const { data, error } = await supabase
-      .from("proveedores")
-      .select(
-        `
-      id,
-      nombre,
-      direccion,
-      telefono,
-      email,
-      cuit,
-      idciudad,
-      idciva,
-      ciudades(nombre),
-      condicion_iva(descripcion)
+      if (!usuarioGuardado?.id) {
+        setProveedores([]);
+        mostrarNotificacion("No hay un usuario identificado", "warning");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setProveedores([]);
+        mostrarNotificacion("No se pudo identificar la empresa", "error");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("proveedores")
+        .select(
+          `
+        id,
+        nombre,
+        direccion,
+        telefono,
+        email,
+        cuit,
+        idciudad,
+        idciva,
+        ciudades(nombre),
+        condicion_iva(descripcion)
       `,
-      )
-      .eq("idempresa", idEmpresa)
-      .order("nombre", { ascending: true });
+        )
+        .eq("idempresa", idEmpresa)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
 
-    if (error) {
-      console.error("Error al cargar el proveedor", error);
-      return;
+      if (error) {
+        console.error("Error al cargar proveedores:", error);
+        setProveedores([]);
+        setMensaje("Error al cargar los proveedores");
+        setTipo("error");
+        setOpen(true);
+        return;
+      }
+      setProveedores(data ?? []);
+    } catch (error) {
+      console.error("Error inesperado cargando proveedores:", error);
+      setProveedores([]);
+      //mostrarNotificacion("No se pudieron cargar los proveedores", "error");
+      setMensaje("No se pudieron cargar los proveedores");
+      setTipo("error");
+      setOpen(true);
     }
-    setProveedores(data || []);
-  };
+  }, []);
 
-  const cargarArticulos = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-    const { data, error } = await supabase
-      .from("articulos")
-      .select("*")
-      .eq("idempresa", idEmpresa)
+  const cargarArticulos = useCallback(async () => {
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-      .order("descripcion", { ascending: true });
+      if (!usuarioGuardado?.id) {
+        setArticulos([]);
+        mostrarNotificacion("No hay un usuario identificado", "warning");
+        return;
+      }
 
-    if (error) {
-      console.error("Error al cargar articulos", error);
-      return;
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setArticulos([]);
+        mostrarNotificacion("No se pudo identificar la empresa", "error");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("articulos")
+        .select(
+          `
+        id,
+        codigo,
+        descripcion,
+        precio,
+        precio_costo,
+        stock,
+        stock_minimo,
+        idfamilia,
+        imagen_url
+      `,
+        )
+        .eq("idempresa", idEmpresa)
+        .eq("activo", true)
+        .order("descripcion", { ascending: true });
+
+      if (error) {
+        console.error("Error al cargar artículos:", error);
+        setArticulos([]);
+        mostrarNotificacion("Error al cargar los artículos", "error");
+        return;
+      }
+
+      setArticulos(data ?? []);
+    } catch (error) {
+      console.error("Error inesperado al cargar artículos:", error);
+      setArticulos([]);
+      mostrarNotificacion("No se pudieron cargar los artículos", "error");
     }
-    setArticulos(data || []);
-  };
+  }, []);
+
   useEffect(() => {
     cargarProveedores();
     cargarArticulos();
-  }, []);
-
-  const manejarProveedor = (id) => {
-    setProveedorId(id);
-    const proveedor = proveedores.find((p) => String(p.id) === String(id));
-    setProveedorSeleccionado(proveedor || null);
-  };
-  const buscarPorCodigoODescripcion = (texto) => {
-    const valor = texto.toLowerCase().trim();
-
-    return articulos.find((a) => {
-      const codigo = String(a.codigo || "").toLowerCase();
-      const descripcion = String(a.descripcion || "").toLowerCase();
-
-      return codigo === valor || descripcion.includes(valor);
-    });
-  };
-
-  const seleccionarArticulo = (articulo) => {
-    setArticuloSeleccionado(articulo);
-    setInputArticulo(articulo.descripcion || "");
-
-    const precioCompra =
-      articulo.precio_Compra ?? articulo.precio_Costo ?? articulo.precio ?? 0;
-
-    setPrecio(precioCompra);
-    setCantidad("1");
-  };
+  }, [cargarProveedores, cargarArticulos]);
 
   const agregarDetalle = () => {
-    if (!articuloSeleccionado) {
+    if (!articuloSeleccionado?.id) {
       setMensaje("Seleccione un artículo");
       setTipo("warning");
       setOpen(true);
       return;
-      return;
     }
-    if (!cantidad || Number(cantidad) <= 0) {
+
+    const cantidadNumerica = Number(cantidad);
+    const precioNumerico = Number(precio);
+
+    if (!Number.isFinite(cantidadNumerica) || cantidadNumerica <= 0) {
       setMensaje("Ingrese una cantidad válida");
       setTipo("warning");
       setOpen(true);
       return;
     }
 
-    if (!precio || Number(precio) <= 0) {
+    if (!Number.isFinite(precioNumerico) || precioNumerico <= 0) {
       setMensaje("Ingrese un precio válido");
       setTipo("warning");
       setOpen(true);
       return;
     }
-    const subtotal = Number(cantidad) * Number(precio);
 
-    const nuevoItem = {
-      id: Date.now(),
-      idarticulo: articuloSeleccionado.id,
-      codigo: articuloSeleccionado.codigo || "",
-      descripcion: articuloSeleccionado.descripcion || "",
-      cantidad: Number(cantidad),
-      precio: Number(precio),
-      subtotal,
-    };
-    setDetalle((prev) => [...prev, nuevoItem]);
+    setDetalle((detalleActual) => {
+      const itemExistente = detalleActual.find(
+        (item) => item.idarticulo === articuloSeleccionado.id,
+      );
+
+      if (itemExistente) {
+        return detalleActual.map((item) => {
+          if (item.idarticulo !== articuloSeleccionado.id) {
+            return item;
+          }
+
+          const nuevaCantidad = Number(item.cantidad) + cantidadNumerica;
+
+          const nuevoSubtotal = Number(
+            (nuevaCantidad * precioNumerico).toFixed(2),
+          );
+
+          return {
+            ...item,
+            cantidad: nuevaCantidad,
+            precio: precioNumerico,
+            subtotal: nuevoSubtotal,
+          };
+        });
+      }
+
+      const subtotal = Number((cantidadNumerica * precioNumerico).toFixed(2));
+
+      return [
+        ...detalleActual,
+        {
+          id: articuloSeleccionado.id,
+          idarticulo: articuloSeleccionado.id,
+          codigo: articuloSeleccionado.codigo ?? "",
+          descripcion: articuloSeleccionado.descripcion ?? "",
+          cantidad: cantidadNumerica,
+          precio: precioNumerico,
+          subtotal,
+        },
+      ];
+    });
 
     setArticuloSeleccionado(null);
     setInputArticulo("");
@@ -190,6 +273,7 @@ export default function Compra() {
       inputArticuloRef.current?.focus();
     }, 100);
   };
+
   const eliminarDetalle = (id) => {
     setDetalle((prev) => prev.filter((item) => item.id !== id));
   };
@@ -326,39 +410,53 @@ export default function Compra() {
   };
 
   const columnasDetalle = [
-    { field: "codigo", heardName: "Codigo", width: 120 },
-    { field: "descripcion", heardName: "Articulo", flex: 1 },
+    {
+      field: "codigo",
+      headerName: "Código",
+      width: 120,
+    },
+    {
+      field: "descripcion",
+      headerName: "Artículo",
+      flex: 1,
+      minWidth: 180,
+    },
     {
       field: "cantidad",
-      heardName: "Cantidad",
+      headerName: "Cantidad",
       width: 110,
       align: "right",
       headerAlign: "right",
     },
     {
       field: "precio",
-      heardName: "precio",
+      headerName: "Precio",
       width: 130,
-      algin: "right",
+      align: "right",
       headerAlign: "right",
-      valueFormatter: (value) => `$ ${formatoNumero(value)}`,
+      valueFormatter: (value) => `$ ${formatoNumero(value ?? 0)}`,
     },
     {
       field: "subtotal",
-      heardName: "Subtotal",
+      headerName: "Subtotal",
       width: 140,
       align: "right",
       headerAlign: "right",
-      valueFormatter: (value) => `$ ${formatoNumero(value)}`,
+      valueFormatter: (value) => `$ ${formatoNumero(value ?? 0)}`,
     },
     {
       field: "eliminar",
       headerName: "",
       width: 70,
       sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      align: "center",
       renderCell: (params) => (
         <IconButton
           color="error"
+          size="small"
+          aria-label={`Eliminar ${params.row.descripcion}`}
           onClick={() => eliminarDetalle(params.row.id)}
         >
           <DeleteIcon />
@@ -391,18 +489,44 @@ export default function Compra() {
             <Autocomplete
               options={proveedores}
               value={proveedorSeleccionado}
-              getOptionLabel={(option) => option?.nombre || ""}
-              isOptionEqualToValue={(option, value) => option.id === value.id}
+              getOptionLabel={(option) => {
+                if (!option) return "";
+
+                return option.cuit
+                  ? `${option.nombre} - ${option.cuit}`
+                  : option.nombre || "";
+              }}
+              isOptionEqualToValue={(option, value) => option.id === value?.id}
+              filterOptions={(options, state) => {
+                const busqueda = state.inputValue.toLowerCase().trim();
+
+                const busquedaSinGuiones = busqueda.replace(/\D/g, "");
+
+                return options.filter((proveedor) => {
+                  const nombre = String(proveedor.nombre || "").toLowerCase();
+
+                  const cuit = String(proveedor.cuit || "").replace(/\D/g, "");
+
+                  const coincideNombre = nombre.includes(busqueda);
+
+                  const coincideCuit =
+                    busquedaSinGuiones && cuit.includes(busquedaSinGuiones);
+
+                  return coincideNombre || coincideCuit;
+                });
+              }}
               onChange={(event, nuevoProveedor) => {
                 setProveedorSeleccionado(nuevoProveedor);
-                setProveedorId(nuevoProveedor?.id || "");
+                setProveedorId(nuevoProveedor?.id ?? "");
               }}
+              noOptionsText="No se encontraron proveedores"
               renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Proveedor"
                   fullWidth
                   size="small"
+                  placeholder="Buscar por nombre o CUIT"
                 />
               )}
             />
@@ -572,14 +696,40 @@ export default function Compra() {
             <Grid size={{ xs: 12, md: 5 }}>
               <Autocomplete
                 options={articulos}
-                getOptionLabel={(option) =>
-                  `${option.codigo || ""} - ${option.descripcion || ""}`
-                }
                 value={articuloSeleccionado}
+                inputValue={inputArticulo}
+                autoHighlight
+                getOptionLabel={(option) =>
+                  `${option?.codigo ?? ""} - ${option?.descripcion ?? ""}`
+                }
+                isOptionEqualToValue={(option, value) =>
+                  option.id === value?.id
+                }
+                filterOptions={(options, state) => {
+                  const busqueda = state.inputValue.toLowerCase().trim();
+
+                  return options.filter((articulo) => {
+                    const codigo = String(articulo.codigo ?? "").toLowerCase();
+                    const descripcion = String(
+                      articulo.descripcion ?? "",
+                    ).toLowerCase();
+
+                    return (
+                      codigo.includes(busqueda) ||
+                      descripcion.includes(busqueda)
+                    );
+                  });
+                }}
+                onInputChange={(_, nuevoValor, motivo) => {
+                  if (motivo !== "reset") {
+                    setInputArticulo(nuevoValor);
+                  }
+                }}
                 onChange={(_, nuevoArticulo) => {
                   if (!nuevoArticulo) {
                     setArticuloId("");
                     setArticuloSeleccionado(null);
+                    setInputArticulo("");
                     setPrecio("");
                     setCantidad(1);
                     return;
@@ -587,7 +737,12 @@ export default function Compra() {
 
                   setArticuloId(nuevoArticulo.id);
                   setArticuloSeleccionado(nuevoArticulo);
-                  setPrecio(nuevoArticulo.precio_costo || 0);
+                  setInputArticulo(
+                    `${nuevoArticulo.codigo ?? ""} - ${
+                      nuevoArticulo.descripcion ?? ""
+                    }`,
+                  );
+                  setPrecio(nuevoArticulo.precio_costo ?? 0);
                   setCantidad(1);
 
                   setTimeout(() => {
@@ -595,11 +750,13 @@ export default function Compra() {
                     cantidadRef.current?.select();
                   }, 0);
                 }}
-                isOptionEqualToValue={(option, value) => option.id === value.id}
+                noOptionsText="No se encontraron artículos"
                 renderInput={(params) => (
                   <TextField
                     {...params}
+                    inputRef={inputArticuloRef}
                     label="Artículo"
+                    placeholder="Buscar por código o descripción"
                     fullWidth
                     size="small"
                   />
@@ -745,6 +902,24 @@ export default function Compra() {
           </Box>
         </Box>
       </Paper>
+      <Snackbar
+        open={open}
+        autoHideDuration={3000}
+        onClose={() => setOpen(false)}
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Alert
+          onClose={() => setOpen(false)}
+          severity={tipo}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {mensaje}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

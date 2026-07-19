@@ -13,7 +13,7 @@ import {
 } from "@mui/material";
 
 import { DataGrid } from "@mui/x-data-grid";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import { supabase } from "../hook/supabaseClient";
 import Notificaciones from "./Notificaciones";
@@ -69,7 +69,7 @@ export default function AbmProveedores() {
     }
   };
 
-  const cargarCondicionIva = async () => {
+  const cargarCondicionIva = useCallback(async () => {
     const { data, error } = await supabase
       .from("condicion_iva")
       .select("id, descripcion")
@@ -81,9 +81,9 @@ export default function AbmProveedores() {
     }
 
     return data || [];
-  };
+  }, []);
 
-  const cargarCiudades = async () => {
+  const cargarCiudades = useCallback(async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     const { data, error } = await supabase
@@ -98,42 +98,55 @@ export default function AbmProveedores() {
     }
 
     return data || [];
-  };
+  }, []);
 
-  const cargarProveedores = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+  const cargarProveedores = useCallback(async () => {
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-    const { data, error } = await supabase
-      .from("proveedores")
-      .select(
-        `
-    id,
-    nombre,
-    direccion,
-    telefono,
-    email,
-    cuit,
-    idciudad,
-    idciva,
-    ciudades(nombre),
-    condicion_iva(descripcion)
-  `,
-      )
-      .eq("idempresa", idEmpresa)
-      .eq("activo", true)
-      .order("nombre", { ascending: true });
+      if (!usuarioGuardado?.id) {
+        return [];
+      }
 
-    console.log("Empresa:", idEmpresa);
-    console.log("Proveedores:", data);
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-    if (error) {
-      console.error("Error al cargar proveedores", error);
+      if (!idEmpresa) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from("proveedores")
+        .select(
+          `
+        id,
+        nombre,
+        direccion,
+        telefono,
+        email,
+        cuit,
+        idciudad,
+        idciva,
+        ciudades(nombre),
+        condicion_iva(descripcion)
+      `,
+        )
+        .eq("idempresa", idEmpresa)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+
+      if (error) {
+        console.error("Error al cargar proveedores:", error);
+        return [];
+      }
+
+      return data ?? [];
+    } catch (error) {
+      console.error("Error inesperado:", error);
       return [];
     }
-
-    return data || [];
-  };
+  }, []);
 
   const limpiarFormulario = () => {
     setNombre("");
@@ -149,16 +162,29 @@ export default function AbmProveedores() {
   };
 
   const editarProveedor = (proveedor) => {
-    setEditandoId(proveedor.id);
-    setNombre(proveedor.nombre || "");
-    setDireccion(proveedor.direccion || "");
-    setTelefono(proveedor.telefono || "");
-    setEmail(proveedor.email || "");
-    setCiudadId(proveedor.idciudad || "");
-    setCondicionIvaId(proveedor.idciva || "");
-    setCuit(proveedor.cuit || "");
+    if (!proveedor?.id) {
+      setMensaje("No se pudo identificar el proveedor");
+      setTipo("error");
+      setOpen(true);
+      return;
+    }
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    setEditandoId(proveedor.id);
+    setNombre(proveedor.nombre ?? "");
+    setDireccion(proveedor.direccion ?? "");
+    setTelefono(proveedor.telefono ?? "");
+    setEmail(proveedor.email ?? "");
+    setCiudadId(proveedor.idciudad ?? "");
+    setCondicionIvaId(proveedor.idciva ?? "");
+    setCuit(proveedor.cuit ?? "");
+
+    setError("");
+    setErrorCuit("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const cancelarEdicion = () => {
@@ -171,134 +197,216 @@ export default function AbmProveedores() {
   };
 
   const eliminarProveedor = async (id) => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    const { data, error: errorCompras } = await supabase
-      .from("compras")
-      .select("id")
-      .eq("idproveedor", id)
-      .eq("idempresa", idEmpresa);
-
-    if (errorCompras) {
-      console.error(errorCompras);
-      setMensaje("Error al verificar compras asociadas");
+    if (!id) {
+      setMensaje("No se pudo identificar el proveedor");
       setTipo("error");
       setOpen(true);
       return;
     }
 
-    if (data && data.length > 0) {
-      const { error } = await supabase
-        .from("proveedores")
-        .update({ activo: false })
-        .eq("id", id)
-        .eq("idempresa", idEmpresa);
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-      if (error) {
-        console.error(error);
-        setMensaje("Error al desactivar proveedor");
+      if (!usuarioGuardado?.id) {
+        setMensaje("No hay un usuario identificado");
+        setTipo("warning");
+        setOpen(true);
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setMensaje("No se pudo identificar la empresa");
         setTipo("error");
         setOpen(true);
         return;
       }
 
-      setMensaje("Proveedor desactivado correctamente");
-      setTipo("success");
-      setOpen(true);
+      const { count, error: errorCompras } = await supabase
+        .from("compras")
+        .select("id", { count: "exact", head: true })
+        .eq("idproveedor", id)
+        .eq("idempresa", idEmpresa);
+
+      if (errorCompras) {
+        throw errorCompras;
+      }
+
+      if ((count ?? 0) > 0) {
+        const { error } = await supabase
+          .from("proveedores")
+          .update({ activo: false })
+          .eq("id", id)
+          .eq("idempresa", idEmpresa);
+
+        if (error) {
+          throw error;
+        }
+
+        setMensaje("Proveedor desactivado correctamente");
+        setTipo("success");
+        setOpen(true);
+      } else {
+        const { error } = await supabase
+          .from("proveedores")
+          .delete()
+          .eq("id", id)
+          .eq("idempresa", idEmpresa);
+
+        if (error) {
+          throw error;
+        }
+
+        setMensaje("Proveedor eliminado correctamente");
+        setTipo("success");
+        setOpen(true);
+      }
 
       const proveedoresActualizados = await cargarProveedores();
       setProveedores(proveedoresActualizados);
-      return;
-    }
+    } catch (error) {
+      console.error("Error eliminando proveedor:", error);
 
-    const { error } = await supabase
-      .from("proveedores")
-      .delete()
-      .eq("id", id)
-      .eq("idempresa", idEmpresa);
-
-    if (error) {
-      console.error(error);
-      setMensaje("Error al eliminar proveedor");
+      setMensaje("No se pudo eliminar o desactivar el proveedor");
       setTipo("error");
       setOpen(true);
-      return;
     }
-
-    setMensaje("Proveedor eliminado correctamente");
-    setTipo("success");
-    setOpen(true);
-
-    const proveedoresActualizados = await cargarProveedores();
-    setProveedores(proveedoresActualizados);
   };
 
   const guardarProveedor = async (e) => {
     e.preventDefault();
 
-    if (!nombre.trim() || !telefono.trim() || !ciudadId || !direccion.trim()) {
+    const nombreLimpio = nombre.trim();
+    const direccionLimpia = direccion.trim();
+    const telefonoLimpio = telefono.trim();
+    const emailLimpio = email.trim();
+    const cuitLimpio = String(cuit || "").replace(/\D/g, "");
+
+    setError("");
+    setErrorCuit("");
+
+    if (!nombreLimpio || !telefonoLimpio || !ciudadId || !direccionLimpia) {
       setError("Complete los campos obligatorios");
       return;
     }
 
-    if (cuit && cuit.length === 11 && !validarCuit(cuit)) {
-      setErrorCuit("CUIT inválido");
-      return;
+    if (cuitLimpio) {
+      if (cuitLimpio.length !== 11) {
+        setErrorCuit("El CUIT debe tener 11 dígitos");
+        return;
+      }
+
+      if (!validarCuit(cuitLimpio)) {
+        setErrorCuit("CUIT inválido");
+        return;
+      }
     }
 
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-    const proveedor = {
-      nombre,
-      direccion,
-      telefono,
-      email,
-      cuit,
-      idciudad: ciudadId || null,
-      idciva: condicionIvaId || null,
-      idempresa: idEmpresa || null,
-    };
+      if (!usuarioGuardado?.id) {
+        setMensaje("No hay un usuario identificado");
+        setTipo("warning");
+        setOpen(true);
+        return;
+      }
 
-    if (editandoId) {
-      const { error } = await supabase
-        .from("proveedores")
-        .update(proveedor)
-        .eq("idempresa", idEmpresa)
-        .eq("id", editandoId);
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
-      if (error) {
-        console.error(error);
-        setMensaje("Error al actualizar el proveedor");
+      if (!idEmpresa) {
+        setMensaje("No se pudo identificar la empresa");
         setTipo("error");
         setOpen(true);
         return;
       }
 
-      setMensaje("Proveedor actualizado");
-      setTipo("success");
-      setOpen(true);
-    } else {
-      const { error } = await supabase.from("proveedores").insert([proveedor]);
+      if (cuitLimpio) {
+        let consultaCuit = supabase
+          .from("proveedores")
+          .select("id")
+          .eq("idempresa", idEmpresa)
+          .eq("cuit", cuitLimpio);
 
-      if (error) {
-        console.error(error);
-        setMensaje("Error al guardar el proveedor");
-        setTipo("error");
-        setOpen(true);
-        return;
+        if (editandoId) {
+          consultaCuit = consultaCuit.neq("id", editandoId);
+        }
+
+        const { data: proveedorExistente, error: errorCuit } =
+          await consultaCuit.maybeSingle();
+
+        if (errorCuit) {
+          throw errorCuit;
+        }
+
+        if (proveedorExistente) {
+          setErrorCuit("Ya existe un proveedor con ese CUIT");
+          return;
+        }
       }
 
-      setMensaje("Proveedor guardado");
-      setTipo("success");
+      const proveedor = {
+        nombre: nombreLimpio,
+        direccion: direccionLimpia,
+        telefono: telefonoLimpio,
+        email: emailLimpio || null,
+        cuit: cuitLimpio || null,
+        idciudad: ciudadId,
+        idciva: condicionIvaId || null,
+        idempresa: idEmpresa,
+      };
+
+      if (editandoId) {
+        const { error } = await supabase
+          .from("proveedores")
+          .update(proveedor)
+          .eq("id", editandoId)
+          .eq("idempresa", idEmpresa);
+
+        if (error) {
+          throw error;
+        }
+
+        setMensaje("Proveedor actualizado correctamente");
+        setTipo("success");
+        setOpen(true);
+      } else {
+        const { error } = await supabase.from("proveedores").insert([
+          {
+            ...proveedor,
+            activo: true,
+          },
+        ]);
+
+        if (error) {
+          throw error;
+        }
+
+        setMensaje("Proveedor guardado correctamente");
+        setTipo("success");
+        setOpen(true);
+      }
+
+      limpiarFormulario();
+
+      const proveedoresActualizados = await cargarProveedores();
+      setProveedores(proveedoresActualizados);
+    } catch (error) {
+      console.error("Error al guardar el proveedor:", error);
+
+      setMensaje(
+        editandoId
+          ? "Error al actualizar el proveedor"
+          : "Error al guardar el proveedor",
+      );
+      setTipo("error");
       setOpen(true);
     }
-
-    limpiarFormulario();
-
-    const proveedoresActualizados = await cargarProveedores();
-    setProveedores(proveedoresActualizados);
   };
 
   const proveedoresFiltrados = proveedores.filter((p) =>
@@ -306,30 +414,57 @@ export default function AbmProveedores() {
   );
 
   const columnas = [
-    { field: "nombre", headerName: "Proveedor", flex: 1 },
-    { field: "direccion", headerName: "Dirección", flex: 1 },
+    {
+      field: "nombre",
+      headerName: "Proveedor",
+      flex: 1,
+      minWidth: 180,
+    },
     {
       field: "ciudad",
       headerName: "Ciudad",
       flex: 1,
-      valueGetter: (value, row) => row?.ciudades?.nombre || "",
+      minWidth: 140,
+      valueGetter: (value, row) => row?.ciudades?.nombre ?? "",
     },
-    { field: "cuit", headerName: "CUIT", flex: 1 },
-    { field: "telefono", headerName: "Teléfono", flex: 1 },
+    {
+      field: "cuit",
+      headerName: "CUIT",
+      width: 140,
+    },
+    {
+      field: "telefono",
+      headerName: "Teléfono",
+      width: 140,
+    },
     {
       field: "condicion_iva",
       headerName: "Cond. IVA",
       flex: 1,
-      valueGetter: (value, row) => row?.condicion_iva?.descripcion || "",
+      minWidth: 170,
+      valueGetter: (value, row) => row?.condicion_iva?.descripcion ?? "",
     },
-    { field: "email", headerName: "Email", width: 200 },
+    {
+      field: "email",
+      headerName: "Email",
+      minWidth: 220,
+      flex: 1,
+    },
     {
       field: "editar",
       headerName: "",
       width: 70,
       sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      align: "center",
       renderCell: (params) => (
-        <IconButton onClick={() => editarProveedor(params.row)} color="primary">
+        <IconButton
+          color="primary"
+          size="small"
+          aria-label={`Editar proveedor ${params.row.nombre}`}
+          onClick={() => editarProveedor(params.row)}
+        >
           <EditIcon />
         </IconButton>
       ),
@@ -339,20 +474,27 @@ export default function AbmProveedores() {
       headerName: "",
       width: 70,
       sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      align: "center",
       renderCell: (params) => (
         <IconButton
+          color="error"
+          size="small"
+          aria-label={`Eliminar proveedor ${params.row.nombre}`}
           onClick={() =>
             setConfirmDialog({
               open: true,
               titulo: "Eliminar proveedor",
-              mensaje:
-                "Si el proveedor tiene compras asociadas será desactivado. Si no tiene compras, será eliminado definitivamente. ¿Deseás continuar?",
-              textoConfirmar: "Aceptar",
+              mensaje: `Si el proveedor "${params.row.nombre}" tiene compras asociadas, será desactivado. Si no tiene movimientos, será eliminado definitivamente.
+               ¿Deseás continuar?`,
+              textoConfirmar: "Continuar",
               color: "error",
-              accion: () => eliminarProveedor(params.row.id),
+              accion: async () => {
+                await eliminarProveedor(params.row.id);
+              },
             })
           }
-          color="error"
         >
           <DeleteIcon />
         </IconButton>
@@ -383,7 +525,7 @@ export default function AbmProveedores() {
     return () => {
       activo = false;
     };
-  }, []);
+  }, [cargarCiudades, cargarProveedores, cargarCondicionIva]);
 
   return (
     <Container maxWidth="lg">
@@ -551,8 +693,33 @@ export default function AbmProveedores() {
           <DataGrid
             rows={proveedoresFiltrados}
             columns={columnas}
-            pageSize={5}
+            getRowId={(row) => row.id}
+            pageSizeOptions={[10, 20, 50]}
+            initialState={{
+              pagination: {
+                paginationModel: {
+                  pageSize: 10,
+                },
+              },
+            }}
             density="compact"
+            disableRowSelectionOnClick
+            localeText={{
+              noRowsLabel: "No hay proveedores cargados",
+            }}
+            sx={{
+              border: 0,
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "#f5f5f5",
+                fontWeight: 600,
+                minHeight: "40px !important",
+                maxHeight: "40px !important",
+              },
+              "& .MuiDataGrid-cell": {
+                display: "flex",
+                alignItems: "center",
+              },
+            }}
           />
         </Box>
       </Paper>

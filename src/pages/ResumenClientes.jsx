@@ -20,7 +20,7 @@ import {
   MenuItem,
 } from "@mui/material";
 
-import VisibilityIcon from "@mui/icons-material/Visibility";
+import DescriptionIcon from "@mui/icons-material/Description";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import CloseIcon from "@mui/icons-material/Close";
@@ -34,6 +34,8 @@ import { generarpdfU } from "../utils/generarpdfu";
 
 import Tooltip from "@mui/material/Tooltip";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import { formatoNumero } from "../utils/formato";
+
 export default function ResumenClientes() {
   const [clientes, setClientes] = useState([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
@@ -129,62 +131,123 @@ export default function ResumenClientes() {
   };
 
   const cargarClientes = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     setLoadingClientes(true);
     setError("");
 
-    const { data, error } = await supabase
-      .from("clientes")
-      .select(
-        `id,
-         nombre,
-         direccion,
-         telefono,
-         ciudades(id,nombre),
-         condicion_iva(id,descripcion)`,
-      )
-      .eq("idempresa", idEmpresa)
-      .order("nombre", { ascending: true });
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-    if (error) {
-      console.log("Error al cargar clientes:", error);
-      setError("No se pudieron cargar los clientes.");
+      if (!usuarioGuardado?.id) {
+        setClientes([]);
+        setError("No hay un usuario identificado.");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setClientes([]);
+        setError("No se pudo identificar la empresa.");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("clientes")
+        .select(
+          `
+        id,
+        nombre,
+        direccion,
+        telefono,
+        cuit,
+        idciudad,
+        idciva,
+        ciudades(id, nombre),
+        condicion_iva(id, descripcion)
+      `,
+        )
+        .eq("idempresa", idEmpresa)
+        .eq("activo", true)
+        .order("nombre", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      setClientes(data ?? []);
+    } catch (error) {
+      console.error("Error al cargar clientes:", error);
       setClientes([]);
+      setError("No se pudieron cargar los clientes.");
+    } finally {
       setLoadingClientes(false);
-      return;
     }
-    setClientes(data || []);
-    setLoadingClientes(false);
   };
 
   const cargarPagos = async (idClienteParam) => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    const idClienteFinal = idClienteParam || clienteId;
 
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    const id = idClienteParam || clienteId;
-    if (!id) return;
-
-    setLoadingPagos(true);
-
-    const { data, error } = await supabase
-      .from("pagos_clientes")
-      .select("id, fecha, importe, forma_pago, observaciones")
-      .eq("idcliente", id)
-      .eq("idempresa", idEmpresa)
-      .order("fecha", { ascending: false });
-
-    if (error) {
-      console.log("Error al cargar pagos:", error);
+    if (!idClienteFinal) {
       setPagos([]);
-      setLoadingPagos(false);
       return;
     }
 
-    setPagos(data || []);
-    setLoadingPagos(false);
+    setLoadingPagos(true);
+
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
+
+      if (!usuarioGuardado?.id) {
+        setPagos([]);
+        setError("No hay un usuario identificado.");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setPagos([]);
+        setError("No se pudo identificar la empresa.");
+        return;
+      }
+
+      let consulta = supabase
+        .from("pagos_clientes")
+        .select(
+          `
+        id,
+        fecha,
+        importe,
+        forma_pago,
+        observaciones
+      `,
+        )
+        .eq("idcliente", idClienteFinal)
+        .eq("idempresa", idEmpresa)
+        .order("fecha", { ascending: false });
+
+      if (fechaDesde && fechaHasta) {
+        consulta = consulta.gte("fecha", fechaDesde).lte("fecha", fechaHasta);
+      }
+
+      const { data, error } = await consulta;
+
+      if (error) {
+        throw error;
+      }
+
+      setPagos(data ?? []);
+    } catch (error) {
+      console.error("Error al cargar pagos:", error);
+      setPagos([]);
+      setError("No se pudieron cargar los pagos del cliente.");
+    } finally {
+      setLoadingPagos(false);
+    }
   };
 
   const cargarFacturasPendientes = async (idClienteParam) => {
@@ -219,12 +282,11 @@ export default function ResumenClientes() {
   };
 
   const buscarResumen = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     setError("");
+    setFacturas([]);
+    setPagos([]);
 
-    if (!clienteSeleccionado) {
+    if (!clienteSeleccionado?.id) {
       setError("Tenés que seleccionar un cliente.");
       return;
     }
@@ -241,29 +303,62 @@ export default function ResumenClientes() {
 
     setLoadingFacturas(true);
 
-    const { data, error } = await supabase
-      .from("facturas")
-      .select(
-        "id, fecha, numero, tipo_comprobante, total, saldo, forma_pago, estado_pago, observaciones",
-      )
-      .eq("idcliente", clienteSeleccionado.id)
-      .eq("idempresa", idEmpresa)
-      .gte("fecha", fechaDesde)
-      .lte("fecha", fechaHasta)
-      .order("fecha", { ascending: true });
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
 
-    if (error) {
-      console.log("Error al buscar facturas:", error);
-      setError("No se pudieron cargar las facturas.");
+      if (!usuarioGuardado?.id) {
+        setError("No hay un usuario identificado.");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setError("No se pudo identificar la empresa.");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("facturas")
+        .select(
+          `
+        id,
+        fecha,
+        numero,
+        numero_fiscal,
+        tipo_comprobante,
+        letra_comprobante,
+        total,
+        saldo,
+        forma_pago,
+        estado_pago,
+        observaciones
+      `,
+        )
+        .eq("idcliente", clienteSeleccionado.id)
+        .eq("idempresa", idEmpresa)
+        .gte("fecha", fechaDesde)
+        .lte("fecha", fechaHasta)
+        .order("fecha", { ascending: true })
+        .order("numero", { ascending: true });
+
+      if (error) {
+        throw error;
+      }
+
+      setFacturas(data ?? []);
+
+      await cargarPagos(clienteSeleccionado.id);
+    } catch (error) {
+      console.error("Error al buscar el resumen del cliente:", error);
       setFacturas([]);
       setPagos([]);
+      setError("No se pudo cargar el resumen del cliente.");
+    } finally {
       setLoadingFacturas(false);
-      return;
     }
-
-    setFacturas(data || []);
-    await cargarPagos(clienteSeleccionado.id);
-    setLoadingFacturas(false);
   };
 
   const aplicarPagoAutomatico = () => {
@@ -309,39 +404,74 @@ export default function ResumenClientes() {
   );
 
   const guardarPago = async () => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    if (!clienteId) {
-      setError("Tenés que seleccionar un cliente.");
-      return;
-    }
-
-    const recibido = Number(importeRecibido || 0);
-
-    if (recibido <= 0) {
-      setError("Ingresá un importe recibido válido.");
-      return;
-    }
-
-    const detallesAplicados = facturasPendientes.filter(
-      (f) => Number(f.pagar || 0) > 0,
-    );
-
-    if (detallesAplicados.length === 0) {
-      setError("No hay importes aplicados a facturas.");
-      return;
-    }
-
-    if (totalAplicado > recibido) {
-      setError("El total aplicado no puede ser mayor al importe recibido.");
-      return;
-    }
-
-    setGuardandoPago(true);
     setError("");
 
     try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
+
+      if (!usuarioGuardado?.id) {
+        setError("No hay un usuario identificado.");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        setError("No se pudo identificar la empresa.");
+        return;
+      }
+
+      if (!clienteId) {
+        setError("Tenés que seleccionar un cliente.");
+        return;
+      }
+
+      const recibido = Number(importeRecibido ?? 0);
+
+      if (!Number.isFinite(recibido) || recibido <= 0) {
+        setError("Ingresá un importe recibido válido.");
+        return;
+      }
+
+      const detallesAplicados = facturasPendientes.filter(
+        (factura) => Number(factura.pagar ?? 0) > 0,
+      );
+
+      if (detallesAplicados.length === 0) {
+        setError("No hay importes aplicados a facturas.");
+        return;
+      }
+
+      const aplicacionInvalida = detallesAplicados.find((factura) => {
+        const pagar = Number(factura.pagar ?? 0);
+        const saldo = Number(factura.saldo ?? 0);
+
+        return !Number.isFinite(pagar) || pagar <= 0 || pagar > saldo;
+      });
+
+      if (aplicacionInvalida) {
+        setError(
+          `El importe aplicado a la factura N° ${
+            aplicacionInvalida.numero ?? ""
+          } supera su saldo pendiente.`,
+        );
+        return;
+      }
+
+      const totalAplicadoActual = detallesAplicados.reduce(
+        (acc, factura) => acc + Number(factura.pagar ?? 0),
+        0,
+      );
+
+      if (totalAplicadoActual > recibido) {
+        setError("El total aplicado no puede ser mayor al importe recibido.");
+        return;
+      }
+
+      setGuardandoPago(true);
+
       const { data: pagoCreado, error: errorPago } = await supabase
         .from("pagos_clientes")
         .insert([
@@ -350,48 +480,61 @@ export default function ResumenClientes() {
             idcliente: clienteId,
             importe: recibido,
             forma_pago: formaPago,
-            observaciones: observaciones || "",
+            observaciones: observaciones.trim() || null,
             idempresa: idEmpresa,
           },
         ])
-        .select()
+        .select("id")
         .single();
 
-      if (errorPago) throw errorPago;
+      if (errorPago) {
+        throw errorPago;
+      }
 
       const detalleInsert = detallesAplicados.map((item) => ({
         idpago: pagoCreado.id,
         idfactura: item.id,
-        importe_aplicado: Number(item.pagar || 0),
+        importe_aplicado: Number(item.pagar ?? 0),
       }));
 
       const { error: errorDetalle } = await supabase
         .from("detalle_pagos_clientes")
         .insert(detalleInsert);
 
-      if (errorDetalle) throw errorDetalle;
+      if (errorDetalle) {
+        throw errorDetalle;
+      }
 
       for (const item of detallesAplicados) {
-        const nuevoSaldo = Number(item.saldo || 0) - Number(item.pagar || 0);
-        const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+        const saldoActual = Number(item.saldo ?? 0);
+        const importeAplicado = Number(item.pagar ?? 0);
 
-        const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+        const nuevoSaldo = Math.max(
+          0,
+          Number((saldoActual - importeAplicado).toFixed(2)),
+        );
+
         const { error: errorFactura } = await supabase
           .from("facturas")
           .update({
             saldo: nuevoSaldo,
-            estado_pago: nuevoSaldo <= 0 ? "pagada" : "pendiente",
+            estado_pago: nuevoSaldo === 0 ? "pagada" : "pendiente",
           })
           .eq("id", item.id)
+          .eq("idcliente", clienteId)
           .eq("idempresa", idEmpresa);
 
-        if (errorFactura) throw errorFactura;
+        if (errorFactura) {
+          throw errorFactura;
+        }
       }
 
-      await cargarFacturasPendientes(clienteId);
-      await cargarPagos(clienteId);
+      await Promise.all([
+        cargarFacturasPendientes(clienteId),
+        cargarPagos(clienteId),
+      ]);
 
-      if (clienteSeleccionado && fechaDesde && fechaHasta) {
+      if (clienteSeleccionado?.id && fechaDesde && fechaHasta) {
         await buscarResumen();
       }
 
@@ -405,7 +548,8 @@ export default function ResumenClientes() {
       setTipo("success");
       setOpen(true);
     } catch (error) {
-      console.log("Error al guardar pago:", error);
+      console.error("Error al guardar el pago:", error);
+
       setError(error?.message || error?.details || "Error al guardar el pago.");
     } finally {
       setGuardandoPago(false);
@@ -413,76 +557,37 @@ export default function ResumenClientes() {
   };
 
   const verDetalle = async (factura) => {
+    if (!factura?.id) return;
+
     setFacturaSeleccionada(factura);
+    setDetalleFactura([]);
 
     const { data, error } = await supabase
       .from("detalle_factura")
       .select(
         `
-          id,
-          cantidad,
-          precio,
-          subtotal,
-          idarticulo,
-          descripcion,
-          articulos:idarticulo ( * )
-        `,
-      )
-      .eq("idfactura", factura.id);
-
-    if (error) {
-      console.error("Error al traer el detalle:", error);
-      return;
-    }
-
-    setDetalleFactura(data || []);
-    setOpenDetalle(true);
-  };
-
-  const imprimirFactura = async (factura) => {
-    const { data: detalleData, error: errorDetalle } = await supabase
-      .from("detalle_factura")
-      .select(
-        `
       id,
-      idfactura,
-      idarticulo,
-      descripcion,
       cantidad,
       precio,
       subtotal,
+      idarticulo,
       articulos (
-        id,
+        codigo,
         descripcion
       )
     `,
       )
       .eq("idfactura", factura.id);
 
-    if (errorDetalle) {
-      console.error("Error al cargar detalle:", errorDetalle);
-      alert("Error al cargar detalle");
+    if (error) {
+      console.error("Error al traer el detalle:", error);
+      setDetalleFactura([]);
+      setOpenDetalle(true);
       return;
     }
 
-    const datosPdf = {
-      numeroFactura: factura.numero,
-      fecha: factura.fecha,
-      tipoComprobante: factura.tipo_comprobante,
-      letraComprobante: factura.letra_comprobante || "X",
-      formaPago: factura.forma_pago,
-      clienteSeleccionado: clienteSeleccionado,
-      detalle: detalleData || [],
-      totalFactura: factura.total,
-      observaciones: factura.observaciones || "",
-      puntoVenta: 1,
-    };
-
-    setPdfData(datosPdf);
-
-    setTimeout(() => {
-      generarpdfU(facturaPdfRef.current, `factura-${factura.numero}.pdf`);
-    }, 800);
+    setDetalleFactura(data ?? []);
+    setOpenDetalle(true);
   };
 
   const limpiarFiltros = () => {
@@ -499,13 +604,12 @@ export default function ResumenClientes() {
     setError("");
   };
 
-  const totalFacturado = useMemo(() => {
-    return facturas.reduce((acc, item) => acc + Number(item.total || 0), 0);
-  }, [facturas]);
-
   const totalDeuda = useMemo(() => {
-    return facturas.reduce((acc, item) => acc + Number(item.saldo || 0), 0);
-  }, [facturas]);
+    return facturasFiltradas.reduce(
+      (acc, item) => acc + Number(item.saldo ?? 0),
+      0,
+    );
+  }, [facturasFiltradas]);
 
   const columnas = [
     {
@@ -517,7 +621,7 @@ export default function ResumenClientes() {
     {
       field: "numero",
       headerName: "N°",
-      width: 100,
+      width: 140,
       renderCell: (params) => {
         const num = params.row.numero;
         if (num === null || num === undefined) return "-";
@@ -537,7 +641,7 @@ export default function ResumenClientes() {
     {
       field: "total",
       headerName: "Total",
-      width: 130,
+      width: 140,
       renderCell: (params) => (
         <Typography fontWeight="bold">
           {formatearMoneda(params.row.total)}
@@ -547,7 +651,7 @@ export default function ResumenClientes() {
     {
       field: "saldo",
       headerName: "Saldo",
-      width: 130,
+      width: 140,
       renderCell: (params) => {
         const saldo = Number(params.row.saldo || 0);
 
@@ -597,13 +701,13 @@ export default function ResumenClientes() {
       renderCell: (params) => (
         <>
           <Tooltip title="Ver Detalle">
-            <IconButton onClick={() => verDetalle(params.row)}>
-              <VisibilityIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Reimprimir factura">
-            <IconButton onClick={() => imprimirFactura(params.row)}>
-              <PrintIcon color="primary" />
+            <IconButton
+              color="primary"
+              size="small"
+              onClick={() => verDetalle(params.row)}
+              aria-label="Ver detalle"
+            >
+              <DescriptionIcon />
             </IconButton>
           </Tooltip>
         </>
@@ -778,12 +882,13 @@ export default function ResumenClientes() {
             <TextField
               select
               size="small"
-              label="Ver Facturas"
+              label="Mostrar"
               value={filtroFacturas}
               onChange={(e) => setFiltroFacturas(e.target.value)}
             >
               <MenuItem value="conSaldo">Con Saldo</MenuItem>
               <MenuItem value="todas">Todas</MenuItem>
+              <MenuItem value="pagadas">Pagadas</MenuItem>
             </TextField>
           </Grid>
 
@@ -861,19 +966,39 @@ export default function ResumenClientes() {
               overflow: "hidden",
             }}
           >
-            <Grid container spacing={2} sx={{ mb: 2 }}>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <Paper sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Cantidad de facturas: {facturas.length}
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Comprobantes
+                  </Typography>
+
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                    {facturasFiltradas.length}
                   </Typography>
                 </Paper>
               </Grid>
 
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <Paper sx={{ p: 2, borderRadius: 2 }}>
-                  <Typography fontWeight="bold">
-                    Total deuda: {formatearMoneda(totalDeuda)}
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    textAlign: "center",
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">
+                    Saldo pendiente
+                  </Typography>
+
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                    $ {formatoNumero(totalDeuda)}
                   </Typography>
                 </Paper>
               </Grid>
@@ -964,53 +1089,79 @@ export default function ResumenClientes() {
           }}
         >
           Número: {facturaSeleccionada?.numero || "-"}
-          <Box>
-            <IconButton onClick={() => imprimirFactura(facturaSeleccionada)}>
-              <PrintIcon />
-            </IconButton>
-
-            <IconButton onClick={() => setOpenDetalle(false)}>
-              <CloseIcon />
-            </IconButton>
-          </Box>
         </DialogTitle>
-
         <DialogContent>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Artículo</TableCell>
-                <TableCell>Cantidad</TableCell>
-                <TableCell>Precio</TableCell>
-                <TableCell>Subtotal</TableCell>
-              </TableRow>
-            </TableHead>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: "1fr 100px 130px 130px",
+              gap: 2,
+              px: 2,
+              py: 1,
+              borderBottom: "1px solid #ddd",
+              fontWeight: 600,
+            }}
+          >
+            <Typography>Artículo</Typography>
+            <Typography align="right">Cantidad</Typography>
+            <Typography align="right">Precio</Typography>
+            <Typography align="right">Subtotal</Typography>
+          </Box>
 
-            <TableBody>
-              {detalleFactura.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    {item.articulos?.descripcion ||
-                      item.articulos?.nombre ||
-                      item.descripcion ||
-                      item.articulo ||
-                      item.nombre ||
-                      "-"}
-                  </TableCell>
+          {detalleFactura.length === 0 ? (
+            <Typography
+              sx={{
+                py: 3,
+                textAlign: "center",
+                color: "text.secondary",
+              }}
+            >
+              Este comprobante no tiene artículos asociados.
+            </Typography>
+          ) : (
+            detalleFactura.map((item) => (
+              <Box
+                key={item.id}
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 100px 130px 130px",
+                  gap: 2,
+                  px: 2,
+                  py: 1.5,
+                  borderBottom: "1px solid #eee",
+                  alignItems: "center",
+                }}
+              >
+                <Box>
+                  <Typography sx={{ fontWeight: 600 }}>
+                    {item.articulos?.descripcion ?? "Artículo sin descripción"}
+                  </Typography>
 
-                  <TableCell>{item.cantidad}</TableCell>
-                  <TableCell>{formatearMoneda(item.precio)}</TableCell>
-                  <TableCell>{formatearMoneda(item.subtotal)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  <Typography variant="body2" color="text.secondary">
+                    Código: {item.articulos?.codigo ?? "-"}
+                  </Typography>
+                </Box>
 
-          <Typography sx={{ mt: 2, fontWeight: "bold" }}>
-            Total:{" "}
-            {formatearMoneda(
+                <Typography align="right">
+                  {formatoNumero(item.cantidad)}
+                </Typography>
+
+                <Typography align="right">
+                  $ {formatoNumero(item.precio)}
+                </Typography>
+
+                <Typography align="right" sx={{ fontWeight: 600 }}>
+                  $ {formatoNumero(item.subtotal)}
+                </Typography>
+              </Box>
+            ))
+          )}
+
+          <Typography sx={{ mt: 2, fontWeight: 700 }}>
+            Total: ${" "}
+            {formatoNumero(
               detalleFactura.reduce(
-                (acc, i) => acc + Number(i.subtotal || 0),
+                (acc, item) => acc + Number(item.subtotal ?? 0),
                 0,
               ),
             )}

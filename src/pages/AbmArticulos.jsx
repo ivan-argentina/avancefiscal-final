@@ -72,36 +72,58 @@ export default function AbmArticulos() {
     accion: null,
   });
   const codigoRef = useRef(null);
+
   const prepararEliminarArticulo = async (articulo) => {
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-    const { count, error } = await supabase
-      .from("detalle_factura")
-      .select("*", { count: "exact", head: true })
-      .eq("idarticulo", articulo.id)
-      .eq("idempresa", idEmpresa);
-
-    if (error) {
-      console.log(error);
-      mostrarNotificacion("Error al verificar movimientos", "error");
+    if (!articulo?.id) {
+      mostrarNotificacion("No se pudo identificar el artículo", "error");
       return;
     }
 
-    if (count > 0) {
-      setConfirmDialog({
-        open: true,
-        titulo: "Desactivar artículo",
-        mensaje: `El artículo "${articulo.descripcion}" ya posee movimientos y no puede eliminarse.
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
+
+      if (!usuarioGuardado?.id) {
+        mostrarNotificacion("No hay un usuario identificado", "warning");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        mostrarNotificacion("No se pudo identificar la empresa", "error");
+        return;
+      }
+
+      const { count, error } = await supabase
+        .from("detalle_factura")
+        .select("id", { count: "exact", head: true })
+        .eq("idarticulo", articulo.id);
+
+      if (error) {
+        console.error("Error verificando movimientos:", error);
+        mostrarNotificacion("Error al verificar movimientos", "error");
+        return;
+      }
+
+      if ((count ?? 0) > 0) {
+        setConfirmDialog({
+          open: true,
+          titulo: "Desactivar artículo",
+          mensaje: `El artículo "${articulo.descripcion}" ya posee movimientos y no puede eliminarse.
 
 ¿Desea desactivarlo para que deje de aparecer en nuevas operaciones?`,
-        textoConfirmar: "Desactivar",
-        color: "warning",
-        accion: async () => {
-          await desactivarArticulo(articulo, idEmpresa);
-        },
-      });
-    } else {
+          textoConfirmar: "Desactivar",
+          color: "warning",
+          accion: async () => {
+            await desactivarArticulo(articulo, idEmpresa);
+          },
+        });
+
+        return;
+      }
+
       setConfirmDialog({
         open: true,
         titulo: "Eliminar artículo",
@@ -112,80 +134,155 @@ export default function AbmArticulos() {
           await eliminarArticuloDefinitivo(articulo, idEmpresa);
         },
       });
+    } catch (error) {
+      console.error("Error preparando eliminación:", error);
+      mostrarNotificacion("No se pudo verificar el artículo", "error");
     }
   };
 
   const desactivarArticulo = async (articulo, idEmpresa) => {
-    const { error } = await supabase
-      .from("articulos")
-      .update({ activo: false })
-      .eq("id", articulo.id)
-      .eq("idempresa", idEmpresa);
+    try {
+      const { error } = await supabase
+        .from("articulos")
+        .update({ activo: false })
+        .eq("id", articulo.id)
+        .eq("idempresa", idEmpresa);
 
-    if (error) {
-      console.log(error);
-      mostrarNotificacion("Error al desactivar artículo", "error");
-      return;
+      if (error) {
+        console.error("Error desactivando artículo:", error);
+
+        mostrarNotificacion("Error al desactivar el artículo", "error");
+
+        return;
+      }
+
+      mostrarNotificacion("Artículo desactivado correctamente", "success");
+
+      await cargarArticulos();
+    } catch (error) {
+      console.error("Error inesperado:", error);
+
+      mostrarNotificacion("No se pudo desactivar el artículo", "error");
     }
-
-    mostrarNotificacion("Artículo desactivado correctamente", "info");
-    cargarArticulos();
   };
 
   const eliminarArticuloDefinitivo = async (articulo, idEmpresa) => {
-    const { error } = await supabase
-      .from("articulos")
-      .delete()
-      .eq("id", articulo.id)
-      .eq("idempresa", idEmpresa);
+    try {
+      const { error } = await supabase
+        .from("articulos")
+        .delete()
+        .eq("id", articulo.id)
+        .eq("idempresa", idEmpresa);
 
-    if (error) {
-      console.log(error);
-      mostrarNotificacion("Error al eliminar artículo", "error");
-      return;
+      if (error) {
+        console.error("Error eliminando artículo:", error);
+        mostrarNotificacion("Error al eliminar el artículo", "error");
+        return;
+      }
+
+      if (articulo.imagen_url) {
+        await eliminarImagenStorage(articulo.imagen_url);
+      }
+
+      mostrarNotificacion("Artículo eliminado correctamente", "success");
+      await cargarArticulos();
+    } catch (error) {
+      console.error("Error inesperado eliminando artículo:", error);
+      mostrarNotificacion("No se pudo eliminar el artículo", "error");
     }
-
-    if (articulo.imagen_url) {
-      await eliminarImagenStorage(articulo.imagen_url);
-    }
-
-    mostrarNotificacion("Artículo eliminado", "info");
-    cargarArticulos();
   };
-
   const abrirConfirmacionEliminar = (articulo) => {
     setConfirmData(articulo);
     setConfirmOpen(true);
   };
-  const buscarArticuloPorCodigo = async (codigo) => {
-    if (!codigo) return;
-    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-    const { data, error } = await supabase
-      .from("articulos")
-      .select("*")
-      .eq("codigo", codigo)
-      .eq("idempresa", idEmpresa)
-      .maybeSingle();
+  const buscarArticuloPorCodigo = async (codigoBuscado) => {
+    const codigoLimpio = String(codigoBuscado || "").trim();
 
-    if (error) {
-      console.log("Error buscando artículo:", error);
-      return;
-    }
+    if (!codigoLimpio) return;
 
-    if (data) {
-      setCodigo(data.codigo || "");
-      setNombre(data.descripcion || "");
-      setPrecio(data.precio || "");
-      setPrecioCosto(data.precio_costo || "");
-      setStock(data.stock || "");
-      setStockMinimo(data.stock_minimo || "");
-      setFamiliaId(data.idfamilia || "");
+    try {
+      const usuarioGuardado = JSON.parse(
+        localStorage.getItem("usuario") || "null",
+      );
+
+      if (!usuarioGuardado?.id) {
+        mostrarNotificacion("No hay un usuario identificado", "warning");
+        return;
+      }
+
+      const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+      if (!idEmpresa) {
+        mostrarNotificacion(
+          "No se pudo identificar la empresa del usuario",
+          "error",
+        );
+        return;
+      }
+
+      const { data, error: errorBusqueda } = await supabase
+        .from("articulos")
+        .select(
+          `
+        id,
+        codigo,
+        descripcion,
+        precio,
+        precio_costo,
+        stock,
+        stock_minimo,
+        idfamilia,
+        imagen_url
+      `,
+        )
+        .eq("codigo", codigoLimpio)
+        .eq("idempresa", idEmpresa)
+        .eq("activo", true)
+        .maybeSingle();
+
+      if (errorBusqueda) {
+        console.error("Error buscando artículo:", errorBusqueda);
+
+        mostrarNotificacion("Ocurrió un error al buscar el artículo", "error");
+
+        return;
+      }
+
+      if (!data) {
+        setEditando(false);
+        setEditandoId(null);
+        setNombre("");
+        setPrecio("");
+        setPrecioCosto("");
+        setMargen("");
+        setStock("");
+        setStockMinimo("");
+        setFamiliaId("");
+        setFotoActual("");
+        setPreviewUrl("");
+        setArchivoImagen(null);
+        setError("");
+
+        return;
+      }
+
+      const costo = Number(data.precio_costo ?? 0);
+      const venta = Number(data.precio ?? 0);
+
+      setCodigo(data.codigo ?? "");
+      setNombre(data.descripcion ?? "");
+      setPrecio(data.precio ?? "");
+      setPrecioCosto(data.precio_costo ?? "");
+      setStock(data.stock ?? "");
+      setStockMinimo(data.stock_minimo ?? "");
+      setFamiliaId(data.idfamilia ?? "");
       setEditandoId(data.id);
-      setFotoActual(data.imagen_url || "");
-      const costo = Number(data.precio_costo || 0);
-      const venta = Number(data.precio || 0);
       setEditando(true);
+
+      setFotoActual(data.imagen_url ?? "");
+      setPreviewUrl(data.imagen_url ? obtenerUrlImagen(data.imagen_url) : "");
+      setArchivoImagen(null);
+
       if (costo > 0) {
         const margenCalculado = ((venta - costo) / costo) * 100;
         setMargen(margenCalculado.toFixed(2));
@@ -193,9 +290,11 @@ export default function AbmArticulos() {
         setMargen("");
       }
 
-      setPreviewUrl(data.imagen_url ? obtenerUrlImagen(data.imagen_url) : "");
-      setArchivoImagen(null);
       setError("");
+    } catch (errorBusqueda) {
+      console.error("Error inesperado buscando artículo:", errorBusqueda);
+
+      mostrarNotificacion("No se pudo buscar el artículo", "error");
     }
   };
   const abrirFoto = (foto) => {
@@ -421,36 +520,47 @@ export default function AbmArticulos() {
     }
   };
 
-  const cargarArticulos = async (idEmpresa) => {
+  const cargarArticulos = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+    if (!usuarioGuardado?.id) {
+      console.log("No hay usuario logueado");
+      setArticulos([]);
+      return;
+    }
+
+    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
-      console.log("idEmpresa vacío en cargarArticulos:", idEmpresa);
+      console.log("No hay una empresa activa seleccionada");
+      setArticulos([]);
       return;
     }
 
     const { data, error } = await supabase
       .from("articulos")
       .select(
-        ` id,
-        codigo,
-        descripcion,
-        precio,
-        precio_costo,
-        stock,
-        stock_minimo,
-        idfamilia,
-        idempresa,
-        imagen_url,
-        familias!fk_articulos_familia(nombre)`,
+        `
+      id,
+      codigo,
+      descripcion,
+      precio,
+      precio_costo,
+      stock,
+      stock_minimo,
+      idfamilia,
+      idempresa,
+      imagen_url,
+      familias!fk_articulos_familia(nombre)
+    `,
       )
       .eq("idempresa", idEmpresa)
       .eq("activo", true)
       .order("descripcion", { ascending: true });
 
     if (error) {
-      console.log(error);
+      console.error("Error al cargar artículos:", error);
+      setArticulos([]);
       mostrarNotificacion("Error al cargar artículos", "error");
       return;
     }
@@ -517,7 +627,18 @@ export default function AbmArticulos() {
     const codigoFinal = codigo.trim() || generarCodigo();
 
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+    if (!usuarioGuardado?.id) {
+      console.log("No hay usuario logueado");
+      return;
+    }
+
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      return;
+    }
 
     const articuloPayload = {
       codigo: codigoFinal,

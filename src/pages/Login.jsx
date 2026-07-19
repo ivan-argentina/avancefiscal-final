@@ -36,7 +36,6 @@ export default function Login() {
       return;
     }
 
-    console.log("Usuario logueado:", usuario);
     localStorage.setItem("usuario", JSON.stringify(usuario));
 
     navigate("/dashboard");
@@ -82,9 +81,7 @@ export default function Login() {
           </Typography>
         )}
 
-        <Button variant="contained" fullWidth onClick={ingresar}>
-          Ingresar
-        </Button>
+        <Button onClick={ingresar}>Ingresar</Button>
       </Paper>
     </Box>
   );

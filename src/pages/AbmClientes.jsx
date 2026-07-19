@@ -108,7 +108,17 @@ export default function AbmClientes() {
 
   const cargarClientes = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    if (!usuarioGuardado?.id) {
+      console.log("No hay usuario logueado");
+      setClientes([]);
+      return;
+    }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      setClientes([]);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("clientes")
@@ -170,7 +180,17 @@ export default function AbmClientes() {
   // 🔹 ELIMINAR
   const eliminarClientes = async (id) => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    if (!usuarioGuardado?.id) {
+      console.log("No hay usuario logueado");
+      setClientes([]);
+      return;
+    }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      setClientes([]);
+      return;
+    }
 
     const { data, error: errorFacturas } = await supabase
       .from("facturas")
@@ -236,7 +256,17 @@ export default function AbmClientes() {
   const guardarClientes = async (e) => {
     e.preventDefault();
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    if (!usuarioGuardado?.id) {
+      console.log("No hay usuario logueado");
+      setClientes([]);
+      return;
+    }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      setClientes([]);
+      return;
+    }
 
     if (!nombre.trim() || !telefono.trim() || !ciudadId || !direccion.trim()) {
       setError("Complete los campos obligatorios");
@@ -315,8 +345,6 @@ export default function AbmClientes() {
   // 🔹 Columnas
   const columnas = [
     { field: "nombre", headerName: "Cliente", flex: 1 },
-
-    { field: "direccion", headerName: "Dirección", flex: 1 },
 
     {
       field: "ciudad",

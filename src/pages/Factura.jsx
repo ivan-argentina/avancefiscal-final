@@ -267,24 +267,29 @@ export default function Factura() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
+    if (!idEmpresa) {
+      console.log("No hay una empresa activa seleccionada");
+      return;
+    }
+
     const { data, error } = await supabase
       .from("clientes")
       .select(
         `
-    id,
-    nombre,
-    direccion,
-    cuit,
-    telefono,
-    idciudad,
-    ciudades:fk_clientes_ciudad(
       id,
-      nombre
-    ),
-    condicion_iva:fk_clientes_civa(
-      id,
-      descripcion
-    )
+      nombre,
+      direccion,
+      cuit,
+      telefono,
+      idciudad,
+      ciudades:fk_clientes_ciudad(
+        id,
+        nombre
+      ),
+      condicion_iva:fk_clientes_civa(
+        id,
+        descripcion
+      )
     `,
       )
       .eq("idempresa", idEmpresa)

@@ -56,7 +56,6 @@ export default function GraficoVentasDiarias({ idEmpresa }) {
         .eq("idempresa", idEmpresa)
         .gte("fecha", desde)
         .lte("fecha", hasta);
-      console.log("VENTAS DIARIAS:", data);
 
       if (error) {
         console.log("Error ventas diarias:", error);

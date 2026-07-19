@@ -25,8 +25,6 @@ import AlertasDashboard from "../componentes/dashboard/AlertasDashboard";
 import KpiBar from "../componentes/dashboard/KpiBar";
 import { API_URL } from "../config";
 
-fetch(`${API_URL}/api/fiscal/certificado`);
-
 export default function Dashboard() {
   const [empresa, setEmpresa] = useState(null);
   const [idEmpresa, setIdEmpresa] = useState(null);
@@ -51,6 +49,15 @@ export default function Dashboard() {
   });
 
   const cargarEmpresa = async () => {
+    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+    if (!usuarioGuardado?.id) {
+      console.log("No se encontró el usuario logueado");
+      setEmpresa(null);
+      setIdEmpresa(null);
+      return;
+    }
+
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
@@ -221,8 +228,6 @@ export default function Dashboard() {
         return;
       }
 
-      console.log("CATEGORÍA EMPRESA:", categoriaEmpresa);
-
       /*
        * CARGAR ÚLTIMO LÍMITE DE LA CATEGORÍA
        */
@@ -294,14 +299,6 @@ export default function Dashboard() {
 
       const porcentaje = (facturado12Meses / limite) * 100;
       const disponible = limite - facturado12Meses;
-
-      console.log("MONOTRIBUTO:", {
-        categoria: categoriaEmpresa,
-        limite,
-        facturado12Meses,
-        porcentaje,
-        disponible,
-      });
 
       setMonotributo({
         condicionIva: empresa.condicion_iva,
