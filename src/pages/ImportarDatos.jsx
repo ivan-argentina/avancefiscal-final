@@ -77,14 +77,12 @@ export default function ImportarDatos() {
         const articulos = XLSX.utils.sheet_to_json(
           workbook.Sheets["Articulos"],
         );
-        console.log("ARTICULOS A IMPORTAR:", articulos.length);
 
         const resultadoArticulos = await importarArticulos(
           articulos,
           mapaFamilias,
           idEmpresa,
           (avance) => {
-            console.log("AVANCE ARTICULOS:", avance);
             setProgreso(20 + Math.round(avance.porcentaje * 0.8));
             setMensaje(
               `Importando artículos... ${avance.actual} de ${avance.total}`,
@@ -136,8 +134,6 @@ export default function ImportarDatos() {
         mapaCiudades,
         idEmpresa,
         (avance) => {
-          // console.log("AVANCE:", avance);
-
           setProgreso(() => avance.porcentaje);
 
           setMensaje(
@@ -195,15 +191,9 @@ export default function ImportarDatos() {
           ...c,
         })),
       );
-      // console.log(ciudades[0]);
     }
-
-    // Vista previa Clientes
     if (wb.Sheets["Clientes"]) {
       const clientes = XLSX.utils.sheet_to_json(wb.Sheets["Clientes"]);
-
-      //  console.log("CLIENTES EXCEL:", clientes[0]);
-
       setPreviewClientes(
         clientes.slice(0, 10).map((c, index) => ({
           id: index + 1,
@@ -211,13 +201,9 @@ export default function ImportarDatos() {
         })),
       );
     }
-    console.log("HOJAS:", wb.SheetNames);
 
     wb.SheetNames.forEach((nombreHoja) => {
       const datos = XLSX.utils.sheet_to_json(wb.Sheets[nombreHoja]);
-      console.log("HOJA:", nombreHoja);
-      console.log("PRIMERA FILA:", datos[0]);
-      console.log("COLUMNAS:", Object.keys(datos[0] || {}));
     });
 
     // Vista previa Artículos
@@ -230,9 +216,6 @@ export default function ImportarDatos() {
 
     if (hojaArticulos) {
       const articulos = XLSX.utils.sheet_to_json(hojaArticulos);
-
-      console.log("ARTICULOS EXCEL:", articulos[0]);
-      console.log("COLUMNAS ARTICULOS:", Object.keys(articulos[0] || {}));
 
       setPreviewArticulos(
         articulos.slice(0, 10).map((a, index) => ({

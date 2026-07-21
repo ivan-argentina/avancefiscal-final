@@ -41,8 +41,10 @@ export default function Facturas() {
   const [openDetalle, setOpenDetalle] = useState(false);
   const [filtro, setFiltro] = useState("");
   const [pdfData, setPdfData] = useState(null);
-  const [pdfNombre, setPdfNombre] = useState("");
   const [emailPendiente, setEmailPendiente] = useState(null);
+  const [pdfNombre, setPdfNombre] = useState("");
+  const [modoPdfPendiente, setModoPdfPendiente] = useState(null);
+  const [whatsAppPendiente, setWhatsAppPendiente] = useState(null);
 
   const facturaPdfRef = useRef();
 
@@ -60,7 +62,7 @@ export default function Facturas() {
     const emailCliente = factura.clientes?.email;
 
     if (!emailCliente) {
-      alert("El cliente no tiene email cargado.");
+      mostrarNotificacion("El cliente no tiene email cargado", "warning");
       return;
     }
 
@@ -90,35 +92,76 @@ export default function Facturas() {
     }));
 
     if (!data.ok) {
-      alert(data.mensaje || data.error || "Error al autorizar factura");
+      mostrarNotificacion(
+        data.mensaje || data.error || "Error al autorizar la factura",
+        "error",
+      );
       return;
     }
 
-    alert("Factura autorizada correctamente");
+    mostrarNotificacion("Factura autorizada correctamente", "success");
 
     await cargarFacturas();
   };
+
   const enviarWhatsAppFactura = async (factura) => {
-    const telefono = factura.clientes?.telefono?.replace(/\D/g, "");
+    let telefono = String(factura.clientes?.telefono || "").replace(/\D/g, "");
 
     if (!telefono) {
-      alert("El cliente no tiene teléfono cargado");
+      mostrarNotificacion("El cliente no tiene teléfono cargado", "warning");
       return;
     }
 
-    // Para WhatsApp siempre generamos el PDF,
-    // aunque la empresa use comandera.
-    await descargarPdfFactura(factura, "whatsapp");
+    if (telefono.startsWith("54")) {
+      telefono = telefono.slice(2);
+    }
+
+    if (telefono.startsWith("0")) {
+      telefono = telefono.slice(1);
+    }
+
+    telefono = telefono.replace(/^15/, "");
+
+    if (!telefono.startsWith("9")) {
+      telefono = `9${telefono}`;
+    }
+
+    const numeroWhatsApp = `54${telefono}`;
 
     const mensaje =
       `Hola ${factura.clientes?.nombre || ""}, ` +
-      `te enviamos la factura N° ${factura.numero_fiscal || factura.numero}. ` +
-      `El archivo PDF se descargó en tu computadora para que puedas adjuntarlo.`;
+      `te enviamos el comprobante N° ` +
+      `${factura.numero_fiscal || factura.numero || ""}. ` +
+      `El PDF fue descargado para que puedas adjuntarlo.`;
 
-    window.open(
-      `https://wa.me/54${telefono}?text=${encodeURIComponent(mensaje)}`,
-      "_blank",
-    );
+    const ventanaWhatsApp = window.open("", "_blank");
+
+    if (!ventanaWhatsApp) {
+      mostrarNotificacion(
+        "El navegador bloqueó la ventana de WhatsApp",
+        "warning",
+      );
+      return;
+    }
+
+    const urlWhatsApp =
+      `https://wa.me/${numeroWhatsApp}` +
+      `?text=${encodeURIComponent(mensaje)}`;
+
+    try {
+      setWhatsAppPendiente({
+        ventana: ventanaWhatsApp,
+        url: urlWhatsApp,
+      });
+
+      await descargarPdfFactura(factura, "whatsapp");
+    } catch (error) {
+      ventanaWhatsApp.close();
+
+      console.error("Error al preparar WhatsApp:", error);
+
+      mostrarNotificacion("No se pudo generar el PDF", "error");
+    }
   };
 
   const cargarFacturas = async () => {
@@ -303,12 +346,6 @@ export default function Facturas() {
         return;
       }
 
-      /*
-       * FORMATEAR DETALLE
-       *
-       * Se incluyen varios nombres para que el mismo detalle
-       * funcione tanto en el PDF como en la comandera.
-       */
       const detalleFormateado = (data || []).map((item) => {
         const descripcion =
           item?.articulos?.descripcion || item.descripcion || "-";
@@ -469,7 +506,6 @@ export default function Facturas() {
       /*
        * REIMPRESIÓN LÁSER / PDF
        */
-      console.log("CLIENTE PDF:", clienteFormateado);
 
       const totalFactura = Number(factura.total || 0);
 
@@ -546,7 +582,6 @@ export default function Facturas() {
       if (modo === "email") {
         setEmailPendiente({
           to: factura.clientes?.email,
-
           filename: nombrePdf,
 
           subject:
@@ -560,28 +595,34 @@ export default function Facturas() {
             )}`,
 
           html: `
-          <p>Hola ${factura.clientes?.nombre || ""},</p>
+      <p>Hola ${factura.clientes?.nombre || ""},</p>
 
-          <p>
-            Le enviamos adjunto el comprobante correspondiente.
-          </p>
+      <p>
+        Le enviamos adjunto el comprobante correspondiente.
+      </p>
 
-          <p>
-            <strong>Total:</strong>
-            $${totalFactura.toLocaleString("es-AR")}
-          </p>
+      <p>
+        <strong>Total:</strong>
+        $${totalFactura.toLocaleString("es-AR", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}
+      </p>
 
-          <p>Muchas gracias.</p>
+      <p>Muchas gracias.</p>
 
-          <p>
-            <strong>
-              ${empresaData?.razon_social || "Avance Fiscal"}
-            </strong>
-          </p>
-        `,
+      <p>
+        <strong>
+          ${empresaData?.razon_social || "Avance Fiscal"}
+        </strong>
+      </p>
+    `,
         });
+
+        setPdfModo("email");
       } else {
         setPdfNombre(nombrePdf);
+        setPdfModo(modo || "descargar");
       }
     } catch (error) {
       console.log("Error al reimprimir el comprobante:", error);
@@ -620,7 +661,7 @@ export default function Facturas() {
           return;
         }
 
-        alert("Email enviado correctamente.");
+        mostrarNotificacion("Email enviado correctamente.");
       } catch (error) {
         console.log("Error enviando email:", error);
         alert("Error enviando email.");
@@ -647,6 +688,39 @@ export default function Facturas() {
 
     return () => clearTimeout(timer);
   }, [pdfData, pdfNombre]);
+  useEffect(() => {
+    if (!pdfData || !pdfNombre || !pdfRef.current) {
+      return;
+    }
+
+    const procesarPdf = async () => {
+      try {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 300);
+        });
+
+        const pdfGenerado = await generarArchivoPdf(pdfRef.current, pdfNombre);
+
+        if (pdfModo === "whatsapp") {
+          abrirWhatsAppPendiente();
+        }
+
+        if (pdfModo === "email") {
+          // enviar email con pdfGenerado
+        }
+      } catch (error) {
+        console.error("Error al procesar el PDF:", error);
+
+        mostrarNotificacion("No se pudo generar el archivo PDF", "error");
+      } finally {
+        setPdfModo(null);
+        setPdfNombre("");
+        setPdfData(null);
+      }
+    };
+
+    procesarPdf();
+  }, [pdfData, pdfNombre, pdfModo]);
 
   const columnas = [
     {

@@ -315,6 +315,9 @@ export default function Dashboard() {
   };
 
   const cargarEstadoCertificado = async () => {
+    if (!empresa?.id) {
+      return;
+    }
     try {
       const usuario = JSON.parse(localStorage.getItem("usuario"));
 

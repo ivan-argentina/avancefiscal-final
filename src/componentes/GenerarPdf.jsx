@@ -1,11 +1,11 @@
 import { forwardRef, useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { formatearCuit } from "../utils/formatearCuit";
+import ConfirmDialog from "../componentes/ConfirmDialog";
 import {
   Box,
   Paper,
   Typography,
-  Divider,
   Table,
   TableBody,
   TableCell,
@@ -36,36 +36,35 @@ const GenerarPdf = forwardRef(
     },
     ref,
   ) => {
-    const formatearFecha = (fecha) => {
-      if (!fecha) return "-";
+    const formatearFecha = (fechaValor) => {
+      if (!fechaValor) return "-";
 
-      const [anio, mes, dia] = fecha.split("-");
+      const [anio, mes, dia] = fechaValor.split("-");
       return `${dia}/${mes}/${anio}`;
     };
+
     const formatoMoneda = (valor) =>
       new Intl.NumberFormat("es-AR", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(Number(valor || 0));
 
-    const formatearNumeroFactura = (ptoVta, numero) => {
-      return `${String(ptoVta || 1).padStart(4, "0")}-${String(
-        numero || 0,
-      ).padStart(8, "0")}`;
-    };
+    const formatearNumeroFactura = (ptoVta, numero) =>
+      `${String(ptoVta || 1).padStart(4, "0")}-${String(numero || 0).padStart(
+        8,
+        "0",
+      )}`;
 
     const formatearTipo = (tipo) => {
       if (!tipo) return "-";
-
       return tipo.replaceAll("_", " ").toUpperCase();
     };
 
-    const formatearFechaAfip = (fecha) => {
-      if (!fecha) return "-";
+    const formatearFechaAfip = (fechaValor) => {
+      if (!fechaValor) return "-";
 
-      const texto = String(fecha);
+      const texto = String(fechaValor);
 
-      // formato AFIP: YYYYMMDD
       if (texto.length === 8 && !texto.includes("-")) {
         const anio = texto.substring(0, 4);
         const mes = texto.substring(4, 6);
@@ -74,9 +73,7 @@ const GenerarPdf = forwardRef(
         return `${dia}/${mes}/${anio}`;
       }
 
-      // formato normal: YYYY-MM-DD
       const [anio, mes, dia] = texto.split("-");
-
       return `${dia}/${mes}/${anio}`;
     };
 
@@ -125,6 +122,8 @@ const GenerarPdf = forwardRef(
       clienteSeleccionado,
     ]);
 
+    const esFacturaC = letraComprobante === "C";
+
     return (
       <Box
         sx={{
@@ -172,6 +171,7 @@ const GenerarPdf = forwardRef(
                   }}
                 />
               )}
+
               <Typography
                 sx={{
                   fontSize: 28,
@@ -203,17 +203,15 @@ const GenerarPdf = forwardRef(
                 {empresa?.condicion_iva || empresa?.condicionIva || "-"}
               </Typography>
 
-              <Box>
-                <Typography sx={{ fontSize: 13, mb: 0.3 }}>
-                  <strong>Ingresos Brutos:</strong>{" "}
-                  {empresa?.ingresos_brutos || "-"}
-                </Typography>
+              <Typography sx={{ fontSize: 13, mb: 0.3 }}>
+                <strong>Ingresos Brutos:</strong>{" "}
+                {empresa?.ingresos_brutos || "-"}
+              </Typography>
 
-                <Typography sx={{ fontSize: 13, mb: 0.3 }}>
-                  <strong>Fecha de Inicio de Actividades:</strong>{" "}
-                  {formatearFecha(empresa?.inicio_actividades)}
-                </Typography>
-              </Box>
+              <Typography sx={{ fontSize: 13, mb: 0.3 }}>
+                <strong>Fecha de Inicio de Actividades:</strong>{" "}
+                {formatearFecha(empresa?.inicio_actividades)}
+              </Typography>
             </Box>
 
             <Box
@@ -248,6 +246,7 @@ const GenerarPdf = forwardRef(
                   {letraComprobante || "X"}
                 </Typography>
               </Box>
+
               <Typography
                 sx={{
                   fontSize: 11,
@@ -430,7 +429,9 @@ const GenerarPdf = forwardRef(
               )}
             </TableBody>
           </Table>
+
           <TableContainer />
+
           <Box sx={{ flexGrow: 1 }} />
 
           <Box
@@ -446,7 +447,7 @@ const GenerarPdf = forwardRef(
           >
             <Box
               sx={{
-                width: 460,
+                flex: 1,
                 p: 1.2,
                 borderRight: "1.5px solid #000",
               }}
@@ -470,78 +471,121 @@ const GenerarPdf = forwardRef(
               )}
             </Box>
 
-            <Box sx={{ width: 340, p: 1.2 }}>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  p: 0.8,
-                  borderBottom: "1px solid #000",
-                }}
-              >
-                <Typography sx={{ fontSize: 12.5, flex: 1 }}>
-                  Importe Neto Gravado:
-                </Typography>
-
-                <Typography
+            <Box
+              sx={{
+                width: 340,
+                p: 1.2,
+                boxSizing: "border-box",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "center",
+              }}
+            >
+              {esFacturaC ? (
+                <Box
                   sx={{
-                    fontSize: 12.5,
-                    minWidth: 110,
-                    textAlign: "right",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    p: 0.8,
+                    borderBottom: "1px solid #000",
                   }}
                 >
-                  $ {formatoMoneda(neto)}
-                </Typography>
-              </Box>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      flex: 1,
+                    }}
+                  >
+                    Subtotal:
+                  </Typography>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  p: 0.8,
-                  borderBottom: "1px solid #000",
-                }}
-              >
-                <Typography sx={{ fontSize: 12.5, flex: 1 }}>
-                  IVA 21%:
-                </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 12.5,
+                      minWidth: 110,
+                      textAlign: "right",
+                    }}
+                  >
+                    $ {formatoMoneda(totalFactura)}
+                  </Typography>
+                </Box>
+              ) : (
+                <>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                      Importe Neto Gravado:
+                    </Typography>
 
-                <Typography
-                  sx={{
-                    fontSize: 12.5,
-                    minWidth: 110,
-                    textAlign: "right",
-                  }}
-                >
-                  $ {formatoMoneda(iva)}
-                </Typography>
-              </Box>
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(neto)}
+                    </Typography>
+                  </Box>
 
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  p: 0.8,
-                  borderBottom: "1px solid #000",
-                }}
-              >
-                <Typography sx={{ fontSize: 12.5, flex: 1 }}>
-                  Importe Otros Tributos:
-                </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                      IVA 21%:
+                    </Typography>
 
-                <Typography
-                  sx={{
-                    fontSize: 12.5,
-                    minWidth: 110,
-                    textAlign: "right",
-                  }}
-                >
-                  $ 0,00
-                </Typography>
-              </Box>
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(iva)}
+                    </Typography>
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                      Importe Otros Tributos:
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ 0,00
+                    </Typography>
+                  </Box>
+                </>
+              )}
 
               <Box
                 sx={{

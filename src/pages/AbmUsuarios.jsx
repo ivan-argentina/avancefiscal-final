@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Grid,
+  Chip,
   MenuItem,
   Paper,
   TextField,
@@ -16,6 +17,9 @@ import Snackbar from "@mui/material/Snackbar";
 import Alert from "@mui/material/Alert";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
+import BlockIcon from "@mui/icons-material/Block";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ConfirmDialog from "../componentes/ConfirmDialog";
 
 export default function AbmUsuarios() {
   const [usuarios, setUsuarios] = useState([]);
@@ -66,7 +70,7 @@ export default function AbmUsuarios() {
     });
   };
 
-  const desactivarUsuario = async (fila) => {
+  const cambiarEstadoUsuario = async (fila) => {
     if (!fila?.id) {
       setMensaje("No se pudo identificar la relación del usuario");
       setTipo("error");
@@ -74,25 +78,33 @@ export default function AbmUsuarios() {
       return;
     }
 
+    const nuevoEstado = !fila.activo;
+
     try {
       const { error } = await supabase
         .from("usuario_empresa")
-        .update({ activo: false })
+        .update({ activo: nuevoEstado })
         .eq("id", fila.id);
 
-      if (error) {
-        throw error;
-      }
+      if (error) throw error;
 
-      setMensaje("Usuario desactivado correctamente");
+      setMensaje(
+        nuevoEstado
+          ? "Usuario activado correctamente"
+          : "Usuario desactivado correctamente",
+      );
       setTipo("success");
       setOpen(true);
 
       await cargarUsuariosYEmpresas();
     } catch (error) {
-      console.error("Error al desactivar usuario:", error);
+      console.error("Error al cambiar el estado del usuario:", error);
 
-      setMensaje("No se pudo desactivar el usuario");
+      setMensaje(
+        nuevoEstado
+          ? "No se pudo activar el usuario"
+          : "No se pudo desactivar el usuario",
+      );
       setTipo("error");
       setOpen(true);
     }
@@ -112,18 +124,22 @@ export default function AbmUsuarios() {
           .order("razon_social"),
 
         supabase.from("usuario_empresa").select(`
-          id,
-          rol,
-          usuarios(
-            id,
-            nombre,
-            usuario,
-            email,
-            rol_global
+           id,
+           rol,
+           activo,
+           usuarios(
+           id,
+           nombre,
+           usuario,
+           email,
+           rol_global,
+           activo
           ),
-          empresas(
-            id,
-            razon_social
+           empresas(
+           id,
+           razon_social,
+           activo
+         )
           )
         `),
       ]);
@@ -163,54 +179,112 @@ export default function AbmUsuarios() {
     setPassword("");
     setIdEmpresa("");
     setRol("usuario");
+    setEditandoId(null);
+    setRelacionEditandoId(null);
   };
 
   const guardarUsuario = async () => {
-    if (!nombre || !usuario || !password || !idEmpresa) {
-      alert("Complete nombre, usuario, contraseña y empresa");
+    if (!nombre.trim() || !usuario.trim() || !idEmpresa) {
+      setMensaje("Complete nombre, usuario y empresa");
+      setTipo("warning");
+      setOpen(true);
       return;
     }
 
-    const { data: usuarioCreado, error: errorUsuario } = await supabase
-      .from("usuarios")
-      .insert([
-        {
+    if (!editandoId && !password.trim()) {
+      setMensaje("Debe ingresar una contraseña");
+      setTipo("warning");
+      setOpen(true);
+      return;
+    }
+
+    try {
+      if (editandoId) {
+        /*
+         * EDITAR USUARIO
+         */
+        const datosUsuario = {
           nombre: nombre.trim(),
           usuario: usuario.trim(),
           email: email.trim() || null,
-          password: password.trim(),
-          rol_global: "usuario",
-          activo: true,
-        },
-      ])
-      .select()
-      .single();
+        };
 
-    if (errorUsuario) {
-      console.log(errorUsuario);
-      alert("Error al crear usuario");
-      return;
+        if (password.trim()) {
+          datosUsuario.password = password.trim();
+        }
+
+        const { error: errorUsuario } = await supabase
+          .from("usuarios")
+          .update(datosUsuario)
+          .eq("id", editandoId);
+
+        if (errorUsuario) throw errorUsuario;
+
+        const { error: errorRelacion } = await supabase
+          .from("usuario_empresa")
+          .update({
+            idempresa: idEmpresa,
+            rol,
+          })
+          .eq("id", relacionEditandoId);
+
+        if (errorRelacion) throw errorRelacion;
+
+        setMensaje("Usuario actualizado correctamente");
+        setTipo("success");
+      } else {
+        /*
+         * NUEVO USUARIO
+         */
+        const { data: usuarioCreado, error: errorUsuario } = await supabase
+          .from("usuarios")
+          .insert([
+            {
+              nombre: nombre.trim(),
+              usuario: usuario.trim(),
+              email: email.trim() || null,
+              password: password.trim(),
+              rol_global: "usuario",
+              activo: true,
+            },
+          ])
+          .select()
+          .single();
+
+        if (errorUsuario) throw errorUsuario;
+
+        const { error: errorRelacion } = await supabase
+          .from("usuario_empresa")
+          .insert([
+            {
+              idusuario: usuarioCreado.id,
+              idempresa: idEmpresa,
+              rol,
+              activo: true,
+            },
+          ]);
+
+        if (errorRelacion) throw errorRelacion;
+
+        setMensaje("Usuario creado correctamente");
+        setTipo("success");
+      }
+
+      setOpen(true);
+
+      limpiar();
+
+      setEditandoId(null);
+      setRelacionEditandoId(null);
+
+      await cargarUsuariosYEmpresas();
+    } catch (error) {
+      console.error("Error al guardar usuario:", error);
+
+      setMensaje("No se pudo guardar el usuario");
+      setTipo("error");
+      setOpen(true);
     }
-
-    const { error: errorRelacion } = await supabase
-      .from("usuario_empresa")
-      .insert([
-        {
-          idusuario: usuarioCreado.id,
-          idempresa: idEmpresa,
-          rol,
-          activo: true,
-        },
-      ]);
-
-    if (errorRelacion) {
-      console.log(errorRelacion);
-      alert("Error al vincular usuario con empresa");
-      return;
-    }
-
-    limpiar();
-    await cargarUsuariosYEmpresas();
   };
 
   const columns = [
@@ -260,37 +334,51 @@ export default function AbmUsuarios() {
       ),
     },
     {
-      field: "desactivar",
+      field: "estadoAccion",
       headerName: "",
       width: 70,
       sortable: false,
       filterable: false,
       disableColumnMenu: true,
       align: "center",
-      renderCell: (params) => (
-        <Tooltip title="Desactivar usuario">
-          <IconButton
-            color="error"
-            size="small"
-            onClick={() =>
-              setConfirmDialog({
-                open: true,
-                titulo: "Desactivar usuario",
-                mensaje: `¿Deseás desactivar al usuario "${
-                  params.row.usuarios?.nombre ?? ""
-                }" de la empresa "${params.row.empresas?.razon_social ?? ""}"?`,
-                textoConfirmar: "Desactivar",
-                color: "warning",
-                accion: async () => {
-                  await desactivarUsuario(params.row);
-                },
-              })
-            }
+      renderCell: (params) => {
+        const estaActivo = params.row.activo;
+
+        return (
+          <Tooltip
+            title={estaActivo ? "Desactivar usuario" : "Activar usuario"}
           >
-            <DeleteIcon />
-          </IconButton>
-        </Tooltip>
-      ),
+            <IconButton
+              color={estaActivo ? "warning" : "success"}
+              size="small"
+              onClick={() =>
+                setConfirmDialog({
+                  open: true,
+                  titulo: estaActivo ? "Desactivar usuario" : "Activar usuario",
+                  mensaje: estaActivo
+                    ? `¿Deseás desactivar al usuario "${
+                        params.row.usuarios?.nombre ?? ""
+                      }" de la empresa "${
+                        params.row.empresas?.razon_social ?? ""
+                      }"?`
+                    : `¿Deseás activar al usuario "${
+                        params.row.usuarios?.nombre ?? ""
+                      }" en la empresa "${
+                        params.row.empresas?.razon_social ?? ""
+                      }"?`,
+                  textoConfirmar: estaActivo ? "Desactivar" : "Activar",
+                  color: estaActivo ? "warning" : "success",
+                  accion: async () => {
+                    await cambiarEstadoUsuario(params.row);
+                  },
+                })
+              }
+            >
+              {estaActivo ? <BlockIcon /> : <CheckCircleIcon />}
+            </IconButton>
+          </Tooltip>
+        );
+      },
     },
   ];
 
@@ -375,11 +463,29 @@ export default function AbmUsuarios() {
               <MenuItem value="contador">Contador</MenuItem>
             </TextField>
           </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 2,
+                mt: 1,
+              }}
+            >
+              {editandoId && (
+                <Button variant="outlined" color="inherit" onClick={limpiar}>
+                  Cancelar
+                </Button>
+              )}
 
-          <Grid size={{ xs: 12, md: 3 }}>
-            <Button variant="contained" onClick={guardarUsuario}>
-              Guardar Usuario
-            </Button>
+              <Button
+                variant="contained"
+                onClick={guardarUsuario}
+                disabled={loading}
+              >
+                {editandoId ? "Actualizar Usuario" : "Guardar Usuario"}
+              </Button>
+            </Box>
           </Grid>
         </Grid>
       </Paper>
@@ -389,6 +495,7 @@ export default function AbmUsuarios() {
           rows={usuarios}
           columns={columns}
           getRowId={(row) => row.id}
+          loading={loading}
           pageSizeOptions={[10, 20, 50, 100]}
         />
       </Paper>
@@ -396,7 +503,7 @@ export default function AbmUsuarios() {
         open={open}
         autoHideDuration={4000}
         onClose={() => setOpen(false)}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
       >
         <Alert
           onClose={() => setOpen(false)}
@@ -407,6 +514,33 @@ export default function AbmUsuarios() {
           {mensaje}
         </Alert>
       </Snackbar>
+      <ConfirmDialog
+        open={confirmDialog.open}
+        titulo={confirmDialog.titulo}
+        mensaje={confirmDialog.mensaje}
+        textoConfirmar={confirmDialog.textoConfirmar}
+        color={confirmDialog.color}
+        onClose={() =>
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+            accion: null,
+          }))
+        }
+        onConfirm={async () => {
+          const accion = confirmDialog.accion;
+
+          setConfirmDialog((prev) => ({
+            ...prev,
+            open: false,
+            accion: null,
+          }));
+
+          if (accion) {
+            await accion();
+          }
+        }}
+      />
     </Box>
   );
 }

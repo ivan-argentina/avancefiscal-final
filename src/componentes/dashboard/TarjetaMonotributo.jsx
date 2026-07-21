@@ -8,18 +8,10 @@ import {
 } from "@mui/material";
 
 export default function TarjetaMonotributo({ monotributo }) {
-  /*
-   * Si todavía no cargó la información,
-   * o la empresa no tiene categoría configurada,
-   * no mostramos la tarjeta.
-   */
   if (!monotributo) {
     return null;
   }
 
-  /*
-   * Solo mostramos la tarjeta para empresas monotributistas.
-   */
   if (monotributo.condicionIva !== "Monotributista") {
     return null;
   }

@@ -128,8 +128,6 @@ export default function Factura() {
 
   useEffect(() => {
     if (!generarPdfPendiente || !pdfData) return;
-    console.log("TIPO IMPRESIÓN:", pdfData.tipoImpresion);
-    console.log("EMPRESA PDF:", pdfData.empresa);
     const timer = setTimeout(async () => {
       try {
         if (pdfData.tipoImpresion === "comandera") {
@@ -362,12 +360,12 @@ export default function Factura() {
       articuloSeleccionado || articulos.find((a) => a.id === articuloId);
 
     if (!art) {
-      alert("Seleccione un artículo");
+      mostrarNotificacion("Seleccione un artículo", "warning");
       return;
     }
 
     if (Number(cantidad) <= 0) {
-      alert("Ingrese una cantidad válida");
+      mostrarNotificacion("Ingrese una cantidad válida", "warning");
       return;
     }
 
@@ -410,12 +408,12 @@ export default function Factura() {
     setGuardando(true);
     try {
       if (!clienteId) {
-        alert("Seleccione un cliente");
+        mostrarNotificacion("Seleccione un cliente", "warning");
         return;
       }
 
       if (detalle.length === 0) {
-        alert("Agregue al menos un artículo");
+        mostrarNotificacion("Agregue al menos un artículo", "warning");
         return;
       }
 
@@ -467,7 +465,7 @@ export default function Factura() {
 
       if (error) {
         console.error("Error al guardar factura:", error);
-        alert("Error al guardar factura");
+        mostrarNotificacion("Error al guardar la factura", "error");
         return;
       }
 
@@ -490,7 +488,7 @@ export default function Factura() {
         .select();
 
       if (errorDetalle) {
-        alert("Error al guardar detalle");
+        mostrarNotificacion("Error al guardar el detalle", "error");
         return;
       }
       //Factura Electronica
@@ -599,7 +597,7 @@ export default function Factura() {
 
         if (errorStock) {
           console.log("Error al mover stock:", errorStock);
-          alert("Error al actualizar stock");
+          mostrarNotificacion("Error al actualizar el stock", "error");
           return;
         }
       }
@@ -637,7 +635,10 @@ export default function Factura() {
       setIdFacturaOrigen(null);
     } catch (error) {
       console.error(error);
-      alert(error.message);
+      mostrarNotificacion(
+        error.message || "Ocurrió un error inesperado",
+        "error",
+      );
     } finally {
       setGuardando(false);
     }
@@ -978,7 +979,10 @@ export default function Factura() {
                         if (articulo) {
                           elegirArticulo(articulo);
                         } else {
-                          alert("Artículo no encontrado");
+                          mostrarNotificacion(
+                            "Artículo no encontrado",
+                            "warning",
+                          );
                         }
                       }
                     }}

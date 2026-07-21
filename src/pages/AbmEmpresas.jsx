@@ -9,9 +9,10 @@ import {
   Typography,
   IconButton,
   MenuItem,
+  Snackbar,
+  Alert,
+  Tooltip,
 } from "@mui/material";
-import BlockIcon from "@mui/icons-material/Block";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import Chip from "@mui/material/Chip";
 import { DataGrid } from "@mui/x-data-grid";
 import { validarCuit } from "../utils/validarCuit";
@@ -19,11 +20,11 @@ import { formatearCuit } from "../utils/formatearCuit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import SaveIcon from "@mui/icons-material/Save";
-import { obtenerEmpresa } from "../utils/obtenerEmpresa";
+import ConfirmDialog from "../componentes/ConfirmDialog";
 
 export default function AbmEmpresas() {
   const [empresas, setEmpresas] = useState([]);
-  const [razonSocial, setRazonSocial] = useState([]);
+  const [razonSocial, setRazonSocial] = useState("");
   const [nombreFantacia, setNombreFantacia] = useState("");
   const [cuit, setCuit] = useState("");
   const [telefono, setTelefono] = useState("");
@@ -45,7 +46,24 @@ export default function AbmEmpresas() {
   const [inicioActividades, setInicioActividades] = useState("");
   const [puntoVenta, setPuntoVenta] = useState("");
   const [ambienteFiscal, setAmbienteFiscal] = useState("homologacion");
+  const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState("info");
+  const [openMensaje, setOpenMensaje] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({
+    open: false,
+    titulo: "",
+    mensaje: "",
+    textoConfirmar: "Aceptar",
+    color: "error",
+    accion: null,
+  });
 
+  const mostrarNotificacion = (texto, tipo = "info") => {
+    setMensaje(texto);
+    setTipoMensaje(tipo);
+    setOpenMensaje(true);
+  };
   const handleCuitChange = (e) => {
     const valor = e.target.value.replace(/\D/g, "");
     setCuit(valor);
@@ -68,9 +86,6 @@ export default function AbmEmpresas() {
       .eq("activo", true)
       .order("nombre", { ascending: true });
 
-    console.log("CIUDADES CARGADAS:", data);
-    console.log("ERROR CIUDADES:", error);
-
     if (error) {
       console.error("Error al cargar ciudades:", error);
       setCiudades([]);
@@ -91,7 +106,7 @@ export default function AbmEmpresas() {
       .order("razon_social", { ascending: true });
 
     if (error) {
-      console.log(error);
+      console.log("Error al cargar empresas:", error);
       return;
     }
 
@@ -131,117 +146,164 @@ export default function AbmEmpresas() {
     const cuitLimpio = String(cuit || "").replace(/\D/g, "");
 
     if (!razonSocialLimpia) {
-      alert("Ingresá la razón social");
+      mostrarNotificacion("Ingresá la razón social", "warning");
       return;
     }
 
     if (cuitLimpio.length !== 11 || !validarCuit(cuitLimpio)) {
-      alert("Ingresá un CUIT válido");
+      mostrarNotificacion("Ingresá un CUIT válido", "warning");
       return;
     }
 
     if (!direccion.trim()) {
-      alert("Ingresá la dirección");
+      mostrarNotificacion("Ingresá la dirección", "warning");
       return;
     }
 
     if (!idCiudad) {
-      alert("Seleccioná una ciudad");
+      mostrarNotificacion("Seleccioná una ciudad", "warning");
       return;
     }
 
     if (!condicionIva) {
-      alert("Seleccioná la condición de IVA");
+      mostrarNotificacion("Seleccioná la condición de IVA", "warning");
       return;
     }
 
     if (condicionIva === "Monotributista" && !categoriaMonotributo) {
-      alert("Seleccioná la categoría de Monotributo");
+      mostrarNotificacion("Seleccioná la categoría de Monotributo", "warning");
       return;
     }
 
-    //Cargo los certificados
-    let rutaCertificado = null;
-    let rutaKey = null;
-
-    if (archivoCertificado) {
-      rutaCertificado = `${cuit}/certificado.crt`;
-
-      const { error } = await supabase.storage
-        .from("afip-certificados")
-        .upload(rutaCertificado, archivoCertificado, {
-          upsert: true,
-        });
-
-      if (error) throw error;
-    }
-
-    if (archivoKey) {
-      rutaKey = `${cuit}/privada.key`;
-
-      const { error } = await supabase.storage
-        .from("afip-certificados")
-        .upload(rutaKey, archivoKey, {
-          upsert: true,
-        });
-
-      if (error) throw error;
-    }
-    //***Hasta Aca */
-    const payload = {
-      razon_social: razonSocialLimpia,
-      nombre_fantasia: String(nombreFantacia || "").trim(),
-      cuit: cuitLimpio,
-      telefono: String(telefono || "").trim(),
-      email: String(email || "").trim(),
-      direccion: String(direccion || "").trim(),
-      punto_venta: Number(puntoVenta || 0),
-      ambiente_fiscal: ambienteFiscal,
-      idciudad: idCiudad ? Number(idCiudad) : null,
-      activo,
-      condicion_iva: condicionIva,
-
-      categoria_monotributo:
-        condicionIva === "Monotributista" ? categoriaMonotributo : null,
-
-      ingresos_brutos: String(ingresosBrutos || "").trim(),
-      inicio_actividades: inicioActividades || null,
-      certificado_vencimiento: certificadoVencimiento || null,
-    };
-    if (rutaCertificado) {
-      payload.certificado_crt = rutaCertificado;
-    }
-    if (rutaKey) {
-      payload.certificado_key = rutaKey;
-    }
-
-    if (!payload.razon_social) {
-      alert("ingrese razon social");
+    if (!puntoVenta || Number(puntoVenta) < 1) {
+      mostrarNotificacion("Ingresá un punto de venta válido", "warning");
       return;
     }
 
-    if (editandoId) {
-      const { error } = await supabase
-        .from("empresas")
-        .update(payload)
-        .eq("id", editandoId);
+    try {
+      setGuardando(true);
 
-      if (error) {
-        console.log(error);
-        alert("Error al actualizar la empresa");
-        return;
-      }
-    } else {
-      const { error } = await supabase.from("empresas").insert([payload]);
+      let rutaCertificado = null;
+      let rutaKey = null;
 
-      if (error) {
-        console.log(error);
-        alert("error al guardar empresa");
-        return;
+      /*
+       * SUBIR CERTIFICADO
+       */
+      if (archivoCertificado) {
+        rutaCertificado = `${cuitLimpio}/certificado.crt`;
+
+        const { error: errorCertificado } = await supabase.storage
+          .from("afip-certificados")
+          .upload(rutaCertificado, archivoCertificado, {
+            upsert: true,
+          });
+
+        if (errorCertificado) {
+          throw errorCertificado;
+        }
       }
+
+      /*
+       * SUBIR CLAVE PRIVADA
+       */
+      if (archivoKey) {
+        rutaKey = `${cuitLimpio}/privada.key`;
+
+        const { error: errorKey } = await supabase.storage
+          .from("afip-certificados")
+          .upload(rutaKey, archivoKey, {
+            upsert: true,
+          });
+
+        if (errorKey) {
+          throw errorKey;
+        }
+      }
+
+      /*
+       * DATOS DE LA EMPRESA
+       */
+      const payload = {
+        razon_social: razonSocialLimpia,
+        nombre_fantasia: String(nombreFantacia || "").trim(),
+        cuit: cuitLimpio,
+        telefono: String(telefono || "").trim(),
+        email: String(email || "").trim(),
+        direccion: String(direccion || "").trim(),
+        punto_venta: Number(puntoVenta),
+        ambiente_fiscal: ambienteFiscal,
+        idciudad: Number(idCiudad),
+        activo,
+        condicion_iva: condicionIva,
+
+        categoria_monotributo:
+          condicionIva === "Monotributista" ? categoriaMonotributo : null,
+
+        ingresos_brutos: String(ingresosBrutos || "").trim(),
+        inicio_actividades: inicioActividades || null,
+        certificado_vencimiento: certificadoVencimiento || null,
+      };
+
+      /*
+       * Solo reemplaza certificados si se subieron nuevos archivos.
+       */
+      if (rutaCertificado) {
+        payload.certificado_crt = rutaCertificado;
+      }
+
+      if (rutaKey) {
+        payload.certificado_key = rutaKey;
+      }
+
+      if (editandoId) {
+        const { data: empresaActualizada, error: errorActualizar } =
+          await supabase
+            .from("empresas")
+            .update(payload)
+            .eq("id", editandoId)
+            .select()
+            .single();
+
+        if (errorActualizar) {
+          throw errorActualizar;
+        }
+
+        if (!empresaActualizada) {
+          throw new Error("Supabase no devolvió la empresa actualizada");
+        }
+
+        mostrarNotificacion("Empresa actualizada correctamente", "success");
+      } else {
+        /*
+         * NUEVA EMPRESA
+         */
+        const { data: empresaCreada, error: errorInsertar } = await supabase
+          .from("empresas")
+          .insert([payload])
+          .select()
+          .single();
+
+        if (errorInsertar) {
+          throw errorInsertar;
+        }
+
+        mostrarNotificacion("Empresa creada correctamente", "success");
+      }
+
+      await cargarEmpresas();
+      limpiarFormulario();
+    } catch (error) {
+      console.error("Error al guardar empresa:", error);
+
+      mostrarNotificacion(
+        editandoId
+          ? `No se pudo actualizar la empresa: ${error.message}`
+          : `No se pudo crear la empresa: ${error.message}`,
+        "error",
+      );
+    } finally {
+      setGuardando(false);
     }
-    limpiarFormulario();
-    await cargarEmpresas();
   };
 
   const editarEmpresa = (empresa) => {
@@ -258,53 +320,75 @@ export default function AbmEmpresas() {
     setPuntoVenta(empresa.punto_venta || "");
     setAmbienteFiscal(empresa.ambiente_fiscal || "homologacion");
     setActivo(empresa.activo ?? true);
+
     setArchivoCertificado(null);
     setArchivoKey(null);
-    setCertificadoVencimiento("");
+
+    setCertificadoVencimiento(
+      empresa.certificado_vencimiento
+        ? String(empresa.certificado_vencimiento).split("T")[0]
+        : "",
+    );
+
     setCertificadoCrt(empresa.certificado_crt || "");
     setCertificadoKey(empresa.certificado_key || "");
-    setIngresosBrutos(empresa.ingresos_brutos || "");
-    setInicioActividades(empresa.inicio_actividades || "");
-    console.log("EMPRESA EDITADA:", empresa);
-    console.log("ID CIUDAD GUARDADO:", empresa.idciudad);
+
+    setIngresosBrutos(
+      empresa.ingresos_brutos !== null && empresa.ingresos_brutos !== undefined
+        ? String(empresa.ingresos_brutos)
+        : "",
+    );
+
+    setInicioActividades(
+      empresa.inicio_actividades
+        ? String(empresa.inicio_actividades).split("T")[0]
+        : "",
+    );
+
+    setErrorCuit("");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
   };
 
   const cambiarEstadoEmpresa = async (empresa) => {
+    if (!empresa?.id) {
+      mostrarNotificacion("No se pudo identificar la empresa", "error");
+      return;
+    }
+
     const nuevoEstado = !empresa.activo;
 
-    const mensaje = nuevoEstado
-      ? "¿Deseás activar nuevamente esta empresa?"
-      : "¿Deseás desactivar esta empresa?";
+    try {
+      const { error } = await supabase
+        .from("empresas")
+        .update({
+          activo: nuevoEstado,
+        })
+        .eq("id", empresa.id);
 
-    if (!window.confirm(mensaje)) return;
+      if (error) throw error;
 
-    const { error } = await supabase
-      .from("empresas")
-      .update({
-        activo: nuevoEstado,
-      })
-      .eq("id", empresa.id);
+      mostrarNotificacion(
+        nuevoEstado
+          ? "Empresa activada correctamente"
+          : "Empresa desactivada correctamente",
+        "success",
+      );
 
-    if (error) {
+      await cargarEmpresas();
+    } catch (error) {
       console.error("Error al cambiar estado de la empresa:", error);
-      alert("No se pudo cambiar el estado de la empresa");
-      return;
+
+      mostrarNotificacion(
+        nuevoEstado
+          ? "No se pudo activar la empresa"
+          : "No se pudo desactivar la empresa",
+        "error",
+      );
     }
-
-    await cargarEmpresas();
-  };
-  //Veriricar creo que hay que borrar eliminarEmpresa
-  const eliminarEmpresa = async (id) => {
-    if (!confirm("Eliminar Empresa")) return;
-
-    const { error } = await supabase.from("empresas").delete().eq("id", id);
-
-    if (error) {
-      console.log(error);
-      alert("No se pudo eliminar la empresa");
-      return;
-    }
-    cargarEmpresas();
   };
 
   const columns = [
@@ -319,16 +403,41 @@ export default function AbmEmpresas() {
       width: 180,
       renderCell: (params) => (
         <Box>
-          <IconButton onClick={() => editarEmpresa(params.row)} color="primary">
-            <EditIcon />
-          </IconButton>
-          <IconButton
-            onClick={() => cambiarEstadoEmpresa(params.row)}
-            color={params.row.activo ? "error" : "success"}
+          <Tooltip title="Editar empresa">
+            <IconButton
+              onClick={() => editarEmpresa(params.row)}
+              color="primary"
+              size="small"
+            >
+              <EditIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip
             title={params.row.activo ? "Desactivar empresa" : "Activar empresa"}
           >
-            <DeleteIcon />
-          </IconButton>
+            <IconButton
+              onClick={() =>
+                setConfirmDialog({
+                  open: true,
+                  titulo: params.row.activo
+                    ? "Desactivar empresa"
+                    : "Activar empresa",
+                  mensaje: params.row.activo
+                    ? `¿Deseás desactivar la empresa "${params.row.razon_social}"?`
+                    : `¿Deseás activar nuevamente la empresa "${params.row.razon_social}"?`,
+                  textoConfirmar: params.row.activo ? "Desactivar" : "Activar",
+                  color: params.row.activo ? "warning" : "success",
+                  accion: async () => {
+                    await cambiarEstadoEmpresa(params.row);
+                  },
+                })
+              }
+              color={params.row.activo ? "warning" : "success"}
+              size="small"
+            >
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
         </Box>
       ),
     },
@@ -368,7 +477,7 @@ export default function AbmEmpresas() {
           </Grid>
           <Grid size={{ xs: 12, md: 4 }}>
             <TextField
-              label="Nombre de Fantacia"
+              label="Nombre de Fantasia"
               fullWidth
               size="small"
               value={nombreFantacia}
@@ -618,8 +727,13 @@ export default function AbmEmpresas() {
               variant="contained"
               startIcon={<SaveIcon />}
               onClick={guardarEmpresa}
+              disabled={guardando}
             >
-              {editandoId ? "Actualizar" : "Guardar"}
+              {guardando
+                ? "Guardando..."
+                : editandoId
+                  ? "Actualizar"
+                  : "Guardar"}
             </Button>
 
             <Button sx={{ ml: 1 }} onClick={limpiarFormulario}>
