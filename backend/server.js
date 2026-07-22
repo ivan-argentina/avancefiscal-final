@@ -1,4 +1,3 @@
-import fs from "fs";
 import forge from "node-forge";
 import express from "express";
 import cors from "cors";
@@ -14,6 +13,16 @@ dotenv.config();
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
+);
+const supabaseAuth = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  },
 );
 const resend = new Resend(process.env.RESEND_API_KEY);
 const app = express();
@@ -71,6 +80,148 @@ const prepararFacturaFiscal = (factura) => {
 
 app.get("/", (req, res) => {
   res.send("Backend fiscal funcionando");
+});
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const usuarioIngresado = String(req.body.usuario || "")
+      .trim()
+      .toLowerCase();
+
+    const passwordIngresada = String(req.body.password || "");
+
+    if (!usuarioIngresado || !passwordIngresada) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingresá el usuario y la contraseña.",
+      });
+    }
+
+    /*
+     * Buscamos internamente el email correspondiente al nombre de usuario.
+     * Esta consulta utiliza service_role y nunca se ejecuta desde React.
+     */
+    const { data: usuarioEncontrado, error: errorUsuario } = await supabase
+      .from("usuarios")
+      .select(
+        `
+        id,
+        nombre,
+        usuario,
+        email,
+        rol_global,
+        activo,
+        auth_user_id
+      `,
+      )
+      .ilike("usuario", usuarioIngresado)
+      .maybeSingle();
+
+    if (errorUsuario) {
+      throw errorUsuario;
+    }
+
+    /*
+     * Utilizamos un mensaje genérico para no revelar
+     * si el usuario existe o no.
+     */
+    if (
+      !usuarioEncontrado ||
+      usuarioEncontrado.activo === false ||
+      !usuarioEncontrado.email ||
+      !usuarioEncontrado.auth_user_id
+    ) {
+      return res.status(401).json({
+        ok: false,
+        error: "Usuario o contraseña incorrectos.",
+      });
+    }
+
+    /*
+     * Supabase Auth valida realmente la contraseña.
+     */
+    const { data: authData, error: authError } =
+      await supabaseAuth.auth.signInWithPassword({
+        email: usuarioEncontrado.email.trim().toLowerCase(),
+        password: passwordIngresada,
+      });
+
+    if (authError || !authData?.session || !authData?.user) {
+      return res.status(401).json({
+        ok: false,
+        error: "Usuario o contraseña incorrectos.",
+      });
+    }
+
+    /*
+     * Verificamos que el usuario autenticado sea exactamente
+     * el que está vinculado en nuestra tabla usuarios.
+     */
+    if (authData.user.id !== usuarioEncontrado.auth_user_id) {
+      return res.status(401).json({
+        ok: false,
+        error: "La cuenta no está correctamente vinculada.",
+      });
+    }
+
+    const { data: relaciones, error: errorRelacion } = await supabase
+      .from("usuario_empresa")
+      .select(
+        `
+        id,
+        rol,
+        activo,
+        empresas (
+          id,
+          razon_social,
+          activo
+        )
+      `,
+      )
+      .eq("idusuario", usuarioEncontrado.id)
+      .eq("activo", true);
+
+    if (errorRelacion) {
+      throw errorRelacion;
+    }
+
+    const relacionActiva = (relaciones || []).find(
+      (relacion) => relacion.empresas?.activo === true,
+    );
+
+    if (!relacionActiva) {
+      return res.status(403).json({
+        ok: false,
+        error: "El usuario no tiene una empresa activa asignada.",
+      });
+    }
+
+    return res.json({
+      ok: true,
+
+      session: {
+        access_token: authData.session.access_token,
+        refresh_token: authData.session.refresh_token,
+        expires_at: authData.session.expires_at,
+        email: authData.user.email,
+      },
+
+      usuario: {
+        ...usuarioEncontrado,
+        idempresa: relacionActiva.empresas.id,
+        empresa: relacionActiva.empresas,
+        rol: relacionActiva.rol,
+      },
+
+      empresa: relacionActiva.empresas,
+    });
+  } catch (error) {
+    console.error("Error iniciando sesión:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudo iniciar sesión.",
+    });
+  }
 });
 
 app.get("/api/fiscal/token", async (req, res) => {
