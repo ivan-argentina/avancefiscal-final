@@ -8,9 +8,14 @@ export default function SelectorEmpresa() {
 
   const usuario = JSON.parse(localStorage.getItem("usuario"));
 
+  const esSuperAdmin =
+    String(usuario?.rol_global || "")
+      .trim()
+      .toLowerCase() === "superadmin";
+
   useEffect(() => {
     const cargarEmpresas = async () => {
-      if (!usuario?.superusuario) return;
+      if (!esSuperAdmin) return;
 
       const { data, error } = await supabase
         .from("empresas")
@@ -52,9 +57,9 @@ export default function SelectorEmpresa() {
     };
 
     cargarEmpresas();
-  }, []);
+  }, [esSuperAdmin]);
 
-  if (!usuario?.superusuario) {
+  if (!esSuperAdmin) {
     return null;
   }
 

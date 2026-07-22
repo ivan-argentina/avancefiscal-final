@@ -329,7 +329,16 @@ export default function Dashboard() {
        * SUPERUSUARIO:
        * usa la empresa seleccionada en el selector.
        */
-      if (usuario.superusuario) {
+      const esSuperAdmin =
+        String(usuario?.rol_global || "")
+          .trim()
+          .toLowerCase() === "superadmin";
+
+      /*
+       * SUPERADMIN:
+       * usa la empresa seleccionada en el selector.
+       */
+      if (esSuperAdmin) {
         const empresaActiva = JSON.parse(localStorage.getItem("empresaActiva"));
 
         cuitEmpresa = empresaActiva?.cuit || null;
@@ -353,7 +362,7 @@ export default function Dashboard() {
       }
 
       if (!cuitEmpresa) {
-        console.log("No se encontró el CUIT de la empresa activa");
+        console.warn("No se encontró el CUIT de la empresa activa");
         setCertificado(null);
         return;
       }

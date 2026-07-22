@@ -7,25 +7,30 @@ export const obtenerEmpresa = async (idusuario) => {
 
   const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
+  const esSuperAdmin =
+    String(usuarioGuardado?.rol_global || "")
+      .trim()
+      .toLowerCase() === "superadmin";
+
   /*
-   * SUPERUSUARIO
+   * SUPERADMIN
    * Usa la empresa elegida desde el selector.
    */
-  if (usuarioGuardado?.superusuario) {
+  if (esSuperAdmin) {
     const empresaActiva = JSON.parse(localStorage.getItem("empresaActiva"));
 
     if (empresaActiva?.id) {
       return empresaActiva.id;
     }
 
-    console.log("El superusuario todavía no seleccionó una empresa activa");
+    console.warn("El superadmin todavía no seleccionó una empresa activa");
 
     return null;
   }
 
   /*
    * USUARIO NORMAL
-   * Mantiene la lógica actual.
+   * Usa la empresa vinculada en usuario_empresa.
    */
   const { data, error } = await supabase
     .from("usuario_empresa")
@@ -35,7 +40,7 @@ export const obtenerEmpresa = async (idusuario) => {
     .maybeSingle();
 
   if (error) {
-    console.log("Error al cargar empresa:", error);
+    console.error("Error al cargar empresa:", error);
     return null;
   }
 
