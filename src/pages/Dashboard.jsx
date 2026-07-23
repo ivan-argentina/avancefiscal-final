@@ -92,7 +92,16 @@ export default function Dashboard() {
 
   const cargarResumen = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
-    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+    const empresaActiva = JSON.parse(localStorage.getItem("empresaActiva"));
+
+    const idEmpresa =
+      empresaActiva?.id ||
+      usuarioGuardado?.idempresa ||
+      usuarioGuardado?.empresa?.id;
+    if (!idEmpresa || idEmpresa === "null" || idEmpresa === "undefined") {
+      console.log("Dashboard: no hay empresa válida seleccionada");
+      return;
+    }
 
     const hoy = new Date();
     const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1)

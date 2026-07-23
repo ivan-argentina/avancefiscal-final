@@ -1,25 +1,40 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../hook/supabaseClient";
-import { Box, Button, Paper, TextField, Typography } from "@mui/material";
-import Snackbar from "@mui/material/Snackbar";
-import Alert from "@mui/material/Alert";
-import InputAdornment from "@mui/material/InputAdornment";
-import IconButton from "@mui/material/IconButton";
+
+import {
+  Alert,
+  Box,
+  Button,
+  IconButton,
+  InputAdornment,
+  Paper,
+  Snackbar,
+  TextField,
+  Typography,
+} from "@mui/material";
+
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 export default function Login() {
   const navigate = useNavigate();
+
   const [usuarioLogin, setUsuarioLogin] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("error");
   const [openMensaje, setOpenMensaje] = useState(false);
   const [ingresando, setIngresando] = useState(false);
   const [mostrarPassword, setMostrarPassword] = useState(false);
+
   const passwordRef = useRef(null);
+
+  /*
+   * En desarrollo usa localhost.
+   * En producción usa la variable configurada en Vercel.
+   */
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
   const mostrarNotificacion = (texto, tipo = "error") => {
     setMensaje(texto);
@@ -28,10 +43,8 @@ export default function Login() {
   };
 
   const ingresar = async () => {
-    setError("");
-
     const usuarioBuscado = usuarioLogin.trim().toLowerCase();
-    const passwordIngresada = password.trim();
+    const passwordIngresada = password;
 
     if (!usuarioBuscado || !passwordIngresada) {
       mostrarNotificacion("Ingresá el usuario y la contraseña.", "warning");
@@ -40,89 +53,97 @@ export default function Login() {
 
     try {
       setIngresando(true);
-      const { data: usuarioEncontrado, error: errorUsuario } = await supabase
-        .from("usuarios")
-        .select(
-          `
-        id,
-        nombre,
-        usuario,
-        email,
-        password,
-        rol_global,
-        activo
-      `,
-        )
-        .ilike("usuario", usuarioBuscado)
-        .maybeSingle();
 
-      if (errorUsuario) {
-        throw errorUsuario;
+      /*
+       * Limpiamos cualquier sesión anterior antes de iniciar
+       * una nueva autenticación.
+       */
+      await supabase.auth.signOut();
+
+      const respuesta = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          usuario: usuarioBuscado,
+          password: passwordIngresada,
+        }),
+      });
+
+      let resultado;
+
+      try {
+        resultado = await respuesta.json();
+      } catch {
+        throw new Error("El servidor no devolvió una respuesta válida.");
       }
 
-      if (!usuarioEncontrado) {
-        mostrarNotificacion("Usuario inexistente.", "warning");
-        return;
-      }
-
-      if (usuarioEncontrado.activo === false) {
-        mostrarNotificacion("El usuario está desactivado.", "warning");
-        return;
-      }
-
-      if (usuarioEncontrado.password?.trim() !== passwordIngresada) {
-        mostrarNotificacion("Contraseña incorrecta.", "warning");
-        return;
-      }
-
-      const { data: relaciones, error: errorRelacion } = await supabase
-        .from("usuario_empresa")
-        .select(
-          `
-        id,
-        rol,
-        activo,
-        empresas (
-          id,
-          razon_social,
-          activo
-        )
-      `,
-        )
-        .eq("idusuario", usuarioEncontrado.id)
-        .eq("activo", true);
-
-      if (errorRelacion) {
-        throw errorRelacion;
-      }
-
-      const relacionActiva = (relaciones ?? []).find(
-        (relacion) => relacion.empresas?.activo === true,
-      );
-
-      if (!relacionActiva) {
+      if (!respuesta.ok || !resultado?.ok) {
         mostrarNotificacion(
-          "El usuario no tiene una empresa activa asignada.",
-          "warning",
+          resultado?.error || "Usuario o contraseña incorrectos.",
+          respuesta.status === 403 ? "warning" : "error",
         );
         return;
       }
 
-      const usuarioSesion = {
-        ...usuarioEncontrado,
-        idempresa: relacionActiva.empresas.id,
-        empresa: relacionActiva.empresas,
-        rol: relacionActiva.rol,
-      };
+      if (
+        !resultado.session?.access_token ||
+        !resultado.session?.refresh_token
+      ) {
+        throw new Error("El servidor no devolvió una sesión válida.");
+      }
 
-      localStorage.setItem("usuario", JSON.stringify(usuarioSesion));
+      /*
+       * Registramos la sesión en el cliente de Supabase.
+       * A partir de acá, todas las consultas llevan el JWT
+       * necesario para que funcionen las políticas RLS.
+       */
+      const { data: sessionData, error: sessionError } =
+        await supabase.auth.setSession({
+          access_token: resultado.session.access_token,
+          refresh_token: resultado.session.refresh_token,
+        });
 
-      localStorage.setItem("empresa", JSON.stringify(relacionActiva.empresas));
+      if (sessionError || !sessionData?.session) {
+        throw sessionError || new Error("No se pudo establecer la sesión.");
+      }
+
+      if (!resultado.usuario || !resultado.empresa) {
+        await supabase.auth.signOut();
+
+        throw new Error("No se recibieron los datos del usuario o la empresa.");
+      }
+
+      /*
+       * Conservamos el formato actual para no romper
+       * los demás módulos de Avance Fiscal.
+       */
+      localStorage.setItem("usuario", JSON.stringify(resultado.usuario));
+      localStorage.setItem("empresa", JSON.stringify(resultado.empresa));
+
+      /*
+       * Al iniciar sesión dejamos seleccionada la primera
+       * empresa activa devuelta por el backend.
+       */
+      localStorage.setItem("empresaActiva", JSON.stringify(resultado.empresa));
 
       navigate("/dashboard");
     } catch (error) {
       console.error("Error al iniciar sesión:", error);
-      setError("No se pudo iniciar sesión.");
+
+      await supabase.auth.signOut();
+
+      localStorage.removeItem("usuario");
+      localStorage.removeItem("empresa");
+      localStorage.removeItem("empresaActiva");
+
+      const mensajeError =
+        error instanceof TypeError
+          ? "No se pudo conectar con el servidor."
+          : error?.message || "No se pudo iniciar sesión.";
+
+      mostrarNotificacion(mensajeError, "error");
     } finally {
       setIngresando(false);
     }
@@ -138,7 +159,13 @@ export default function Login() {
         bgcolor: "#f5f5f5",
       }}
     >
-      <Paper sx={{ p: 4, width: 360, borderRadius: 3 }}>
+      <Paper
+        sx={{
+          p: 4,
+          width: 360,
+          borderRadius: 3,
+        }}
+      >
         <Typography variant="h5" fontWeight="bold" mb={3}>
           Iniciar Sesión
         </Typography>
@@ -148,23 +175,27 @@ export default function Login() {
           fullWidth
           size="small"
           value={usuarioLogin}
+          disabled={ingresando}
+          autoComplete="username"
           onChange={(e) => setUsuarioLogin(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              document.getElementById("password")?.focus();
+              passwordRef.current?.focus();
             }
           }}
         />
 
         <TextField
-          id="password"
           label="Contraseña"
           type={mostrarPassword ? "text" : "password"}
           fullWidth
           size="small"
           value={password}
+          disabled={ingresando}
+          autoComplete="current-password"
           sx={{ mt: 1 }}
+          inputRef={passwordRef}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !ingresando) {
@@ -173,9 +204,6 @@ export default function Login() {
             }
           }}
           slotProps={{
-            htmlInput: {
-              ref: passwordRef,
-            },
             input: {
               endAdornment: (
                 <InputAdornment position="end">
@@ -184,6 +212,12 @@ export default function Login() {
                     onMouseDown={(e) => e.preventDefault()}
                     edge="end"
                     size="small"
+                    disabled={ingresando}
+                    aria-label={
+                      mostrarPassword
+                        ? "Ocultar contraseña"
+                        : "Mostrar contraseña"
+                    }
                   >
                     {mostrarPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
@@ -203,6 +237,7 @@ export default function Login() {
           {ingresando ? "INGRESANDO..." : "INGRESAR"}
         </Button>
       </Paper>
+
       <Snackbar
         open={openMensaje}
         autoHideDuration={4000}
