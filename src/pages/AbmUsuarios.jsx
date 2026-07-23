@@ -1,24 +1,26 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../hook/supabaseClient";
+
 import {
+  Alert,
   Box,
   Button,
   Grid,
-  Chip,
+  IconButton,
   MenuItem,
   Paper,
+  Snackbar,
   TextField,
-  Typography,
-  IconButton,
   Tooltip,
+  Typography,
 } from "@mui/material";
+
 import { DataGrid } from "@mui/x-data-grid";
-import Snackbar from "@mui/material/Snackbar";
-import Alert from "@mui/material/Alert";
+
 import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
 import BlockIcon from "@mui/icons-material/Block";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+
 import ConfirmDialog from "../componentes/ConfirmDialog";
 
 export default function AbmUsuarios() {
@@ -31,12 +33,16 @@ export default function AbmUsuarios() {
   const [password, setPassword] = useState("");
   const [idEmpresa, setIdEmpresa] = useState("");
   const [rol, setRol] = useState("usuario");
+
   const [loading, setLoading] = useState(false);
+
   const [mensaje, setMensaje] = useState("");
   const [tipo, setTipo] = useState("info");
   const [open, setOpen] = useState(false);
+
   const [editandoId, setEditandoId] = useState(null);
   const [relacionEditandoId, setRelacionEditandoId] = useState(null);
+
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     titulo: "",
@@ -45,70 +51,6 @@ export default function AbmUsuarios() {
     color: "error",
     accion: null,
   });
-
-  const editarUsuario = (fila) => {
-    if (!fila?.id || !fila?.usuarios?.id) {
-      setMensaje("No se pudo identificar el usuario");
-      setTipo("error");
-      setOpen(true);
-      return;
-    }
-
-    setEditandoId(fila.usuarios.id);
-    setRelacionEditandoId(fila.id);
-
-    setNombre(fila.usuarios.nombre ?? "");
-    setUsuario(fila.usuarios.usuario ?? "");
-    setEmail(fila.usuarios.email ?? "");
-    setPassword("");
-    setIdEmpresa(fila.empresas?.id ?? "");
-    setRol(fila.rol ?? "usuario");
-
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  const cambiarEstadoUsuario = async (fila) => {
-    if (!fila?.id) {
-      setMensaje("No se pudo identificar la relación del usuario");
-      setTipo("error");
-      setOpen(true);
-      return;
-    }
-
-    const nuevoEstado = !fila.activo;
-
-    try {
-      const { error } = await supabase
-        .from("usuario_empresa")
-        .update({ activo: nuevoEstado })
-        .eq("id", fila.id);
-
-      if (error) throw error;
-
-      setMensaje(
-        nuevoEstado
-          ? "Usuario activado correctamente"
-          : "Usuario desactivado correctamente",
-      );
-      setTipo("success");
-      setOpen(true);
-
-      await cargarUsuariosYEmpresas();
-    } catch (error) {
-      console.error("Error al cambiar el estado del usuario:", error);
-
-      setMensaje(
-        nuevoEstado
-          ? "No se pudo activar el usuario"
-          : "No se pudo desactivar el usuario",
-      );
-      setTipo("error");
-      setOpen(true);
-    }
-  };
 
   const cargarUsuariosYEmpresas = async () => {
     setLoading(true);
@@ -124,22 +66,22 @@ export default function AbmUsuarios() {
           .order("razon_social"),
 
         supabase.from("usuario_empresa").select(`
-           id,
-           rol,
-           activo,
-           usuarios(
-           id,
-           nombre,
-           usuario,
-           email,
-           rol_global,
-           activo
+          id,
+          rol,
+          activo,
+          usuarios(
+            id,
+            nombre,
+            usuario,
+            email,
+            rol_global,
+            activo,
+            auth_user_id
           ),
-           empresas(
-           id,
-           razon_social,
-           activo
-         )
+          empresas(
+            id,
+            razon_social,
+            activo
           )
         `),
       ]);
@@ -183,9 +125,77 @@ export default function AbmUsuarios() {
     setRelacionEditandoId(null);
   };
 
+  const editarUsuario = (fila) => {
+    if (!fila?.id || !fila?.usuarios?.id) {
+      setMensaje("No se pudo identificar el usuario");
+      setTipo("error");
+      setOpen(true);
+      return;
+    }
+
+    setEditandoId(fila.usuarios.id);
+    setRelacionEditandoId(fila.id);
+
+    setNombre(fila.usuarios.nombre ?? "");
+    setUsuario(fila.usuarios.usuario ?? "");
+    setEmail(fila.usuarios.email ?? "");
+    setPassword("");
+    setIdEmpresa(fila.empresas?.id ?? "");
+    setRol(fila.rol ?? "usuario");
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  const cambiarEstadoUsuario = async (fila) => {
+    if (!fila?.id) {
+      setMensaje("No se pudo identificar la relación del usuario");
+      setTipo("error");
+      setOpen(true);
+      return;
+    }
+
+    const nuevoEstado = !fila.activo;
+
+    try {
+      const { error } = await supabase
+        .from("usuario_empresa")
+        .update({
+          activo: nuevoEstado,
+        })
+        .eq("id", fila.id);
+
+      if (error) {
+        throw error;
+      }
+
+      setMensaje(
+        nuevoEstado
+          ? "Usuario activado correctamente"
+          : "Usuario desactivado correctamente",
+      );
+      setTipo("success");
+      setOpen(true);
+
+      await cargarUsuariosYEmpresas();
+    } catch (error) {
+      console.error("Error al cambiar el estado del usuario:", error);
+
+      setMensaje(
+        nuevoEstado
+          ? "No se pudo activar el usuario"
+          : "No se pudo desactivar el usuario",
+      );
+      setTipo("error");
+      setOpen(true);
+    }
+  };
+
   const guardarUsuario = async () => {
-    if (!nombre.trim() || !usuario.trim() || !idEmpresa) {
-      setMensaje("Complete nombre, usuario y empresa");
+    if (!nombre.trim() || !usuario.trim() || !email.trim() || !idEmpresa) {
+      setMensaje("Complete nombre, usuario, email y empresa");
       setTipo("warning");
       setOpen(true);
       return;
@@ -199,14 +209,18 @@ export default function AbmUsuarios() {
     }
 
     try {
+      setLoading(true);
+
       if (editandoId) {
         /*
-         * EDITAR USUARIO
+         * EDICIÓN TEMPORAL:
+         * Por ahora actualiza directamente las tablas.
+         * Luego migraremos también la edición a Supabase Auth.
          */
         const datosUsuario = {
           nombre: nombre.trim(),
-          usuario: usuario.trim(),
-          email: email.trim() || null,
+          usuario: usuario.trim().toLowerCase(),
+          email: email.trim().toLowerCase(),
         };
 
         if (password.trim()) {
@@ -218,7 +232,9 @@ export default function AbmUsuarios() {
           .update(datosUsuario)
           .eq("id", editandoId);
 
-        if (errorUsuario) throw errorUsuario;
+        if (errorUsuario) {
+          throw errorUsuario;
+        }
 
         const { error: errorRelacion } = await supabase
           .from("usuario_empresa")
@@ -228,43 +244,47 @@ export default function AbmUsuarios() {
           })
           .eq("id", relacionEditandoId);
 
-        if (errorRelacion) throw errorRelacion;
+        if (errorRelacion) {
+          throw errorRelacion;
+        }
 
         setMensaje("Usuario actualizado correctamente");
         setTipo("success");
       } else {
         /*
-         * NUEVO USUARIO
+         * NUEVO USUARIO:
+         * El backend crea Supabase Auth, usuarios
+         * y usuario_empresa.
          */
-        const { data: usuarioCreado, error: errorUsuario } = await supabase
-          .from("usuarios")
-          .insert([
-            {
+        const respuesta = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/auth/usuarios`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
               nombre: nombre.trim(),
-              usuario: usuario.trim(),
-              email: email.trim() || null,
+              usuario: usuario.trim().toLowerCase(),
+              email: email.trim().toLowerCase(),
               password: password.trim(),
-              rol_global: "usuario",
-              activo: true,
-            },
-          ])
-          .select()
-          .single();
-
-        if (errorUsuario) throw errorUsuario;
-
-        const { error: errorRelacion } = await supabase
-          .from("usuario_empresa")
-          .insert([
-            {
-              idusuario: usuarioCreado.id,
-              idempresa: idEmpresa,
+              idEmpresa,
               rol,
-              activo: true,
-            },
-          ]);
+            }),
+          },
+        );
 
-        if (errorRelacion) throw errorRelacion;
+        let resultado;
+
+        try {
+          resultado = await respuesta.json();
+        } catch {
+          throw new Error("El servidor no devolvió una respuesta válida");
+        }
+
+        if (!respuesta.ok || !resultado?.ok) {
+          throw new Error(resultado?.error || "No se pudo crear el usuario");
+        }
 
         setMensaje("Usuario creado correctamente");
         setTipo("success");
@@ -274,16 +294,15 @@ export default function AbmUsuarios() {
 
       limpiar();
 
-      setEditandoId(null);
-      setRelacionEditandoId(null);
-
       await cargarUsuariosYEmpresas();
     } catch (error) {
       console.error("Error al guardar usuario:", error);
 
-      setMensaje("No se pudo guardar el usuario");
+      setMensaje(error?.message || "No se pudo guardar el usuario");
       setTipo("error");
       setOpen(true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -312,7 +331,17 @@ export default function AbmUsuarios() {
       flex: 1,
       renderCell: (params) => params.row.empresas?.razon_social || "",
     },
-    { field: "rol", headerName: "Rol", width: 120 },
+    {
+      field: "rol",
+      headerName: "Rol",
+      width: 120,
+    },
+    {
+      field: "estado",
+      headerName: "Estado",
+      width: 110,
+      renderCell: (params) => (params.row.activo ? "Activo" : "Inactivo"),
+    },
     {
       field: "editar",
       headerName: "",
@@ -388,7 +417,13 @@ export default function AbmUsuarios() {
         Usuarios
       </Typography>
 
-      <Paper sx={{ p: 2, mb: 2, borderRadius: 3 }}>
+      <Paper
+        sx={{
+          p: 2,
+          mb: 2,
+          borderRadius: 3,
+        }}
+      >
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField
@@ -413,6 +448,7 @@ export default function AbmUsuarios() {
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField
               label="Email"
+              type="email"
               fullWidth
               size="small"
               value={email}
@@ -422,7 +458,7 @@ export default function AbmUsuarios() {
 
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField
-              label="Contraseña"
+              label={editandoId ? "Nueva contraseña (opcional)" : "Contraseña"}
               type="password"
               fullWidth
               size="small"
@@ -458,11 +494,15 @@ export default function AbmUsuarios() {
               onChange={(e) => setRol(e.target.value)}
             >
               <MenuItem value="admin">Admin</MenuItem>
+
               <MenuItem value="usuario">Usuario</MenuItem>
+
               <MenuItem value="vendedor">Vendedor</MenuItem>
+
               <MenuItem value="contador">Contador</MenuItem>
             </TextField>
           </Grid>
+
           <Grid size={{ xs: 12 }}>
             <Box
               sx={{
@@ -473,7 +513,12 @@ export default function AbmUsuarios() {
               }}
             >
               {editandoId && (
-                <Button variant="outlined" color="inherit" onClick={limpiar}>
+                <Button
+                  variant="outlined"
+                  color="inherit"
+                  onClick={limpiar}
+                  disabled={loading}
+                >
                   Cancelar
                 </Button>
               )}
@@ -483,14 +528,24 @@ export default function AbmUsuarios() {
                 onClick={guardarUsuario}
                 disabled={loading}
               >
-                {editandoId ? "Actualizar Usuario" : "Guardar Usuario"}
+                {loading
+                  ? "GUARDANDO..."
+                  : editandoId
+                    ? "ACTUALIZAR USUARIO"
+                    : "GUARDAR USUARIO"}
               </Button>
             </Box>
           </Grid>
         </Grid>
       </Paper>
 
-      <Paper sx={{ height: 420, width: "100%", borderRadius: 3 }}>
+      <Paper
+        sx={{
+          height: 420,
+          width: "100%",
+          borderRadius: 3,
+        }}
+      >
         <DataGrid
           rows={usuarios}
           columns={columns}
@@ -499,11 +554,15 @@ export default function AbmUsuarios() {
           pageSizeOptions={[10, 20, 50, 100]}
         />
       </Paper>
+
       <Snackbar
         open={open}
         autoHideDuration={4000}
         onClose={() => setOpen(false)}
-        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
       >
         <Alert
           onClose={() => setOpen(false)}
@@ -514,6 +573,7 @@ export default function AbmUsuarios() {
           {mensaje}
         </Alert>
       </Snackbar>
+
       <ConfirmDialog
         open={confirmDialog.open}
         titulo={confirmDialog.titulo}
@@ -521,8 +581,8 @@ export default function AbmUsuarios() {
         textoConfirmar={confirmDialog.textoConfirmar}
         color={confirmDialog.color}
         onClose={() =>
-          setConfirmDialog((prev) => ({
-            ...prev,
+          setConfirmDialog((anterior) => ({
+            ...anterior,
             open: false,
             accion: null,
           }))
@@ -530,8 +590,8 @@ export default function AbmUsuarios() {
         onConfirm={async () => {
           const accion = confirmDialog.accion;
 
-          setConfirmDialog((prev) => ({
-            ...prev,
+          setConfirmDialog((anterior) => ({
+            ...anterior,
             open: false,
             accion: null,
           }));

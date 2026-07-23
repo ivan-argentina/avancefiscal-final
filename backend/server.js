@@ -110,7 +110,8 @@ app.post("/api/auth/login", async (req, res) => {
         email,
         rol_global,
         activo,
-        auth_user_id
+        auth_user_id,
+        debe_cambiar_password
       `,
       )
       .ilike("usuario", usuarioIngresado)
@@ -294,6 +295,7 @@ app.post("/api/auth/usuarios", async (req, res) => {
           rol_global: "usuario",
           activo: true,
           auth_user_id: authUserId,
+          debe_cambiar_password: true,
         },
       ])
       .select("id")

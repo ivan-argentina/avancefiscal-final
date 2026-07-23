@@ -45,6 +45,7 @@ export default function Facturas() {
   const [pdfNombre, setPdfNombre] = useState("");
   const [modoPdfPendiente, setModoPdfPendiente] = useState(null);
   const [whatsAppPendiente, setWhatsAppPendiente] = useState(null);
+  const [pdfModo, setPdfModo] = useState(null);
 
   const facturaPdfRef = useRef();
 
@@ -679,17 +680,7 @@ export default function Facturas() {
   }, []);
 
   useEffect(() => {
-    if (!pdfData || !pdfNombre) return;
-
-    const timer = setTimeout(() => {
-      generarpdfU(facturaPdfRef.current, pdfNombre);
-      setPdfNombre("");
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [pdfData, pdfNombre]);
-  useEffect(() => {
-    if (!pdfData || !pdfNombre || !pdfRef.current) {
+    if (!pdfData || !pdfNombre || !facturaPdfRef.current) {
       return;
     }
 
@@ -699,14 +690,17 @@ export default function Facturas() {
           setTimeout(resolve, 300);
         });
 
-        const pdfGenerado = await generarArchivoPdf(pdfRef.current, pdfNombre);
+        const pdfGenerado = await generarArchivoPdf(
+          facturaPdfRef.current,
+          pdfNombre,
+        );
 
         if (pdfModo === "whatsapp") {
-          abrirWhatsAppPendiente();
+          abrirWhatsAppPendiente(pdfGenerado);
         }
 
         if (pdfModo === "email") {
-          // enviar email con pdfGenerado
+          // Después conectaremos aquí el envío por email.
         }
       } catch (error) {
         console.error("Error al procesar el PDF:", error);
