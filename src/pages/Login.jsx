@@ -127,6 +127,11 @@ export default function Login() {
        * empresa activa devuelta por el backend.
        */
       localStorage.setItem("empresaActiva", JSON.stringify(resultado.empresa));
+      if (resultado.usuario.debe_cambiar_password) {
+        navigate("/cambiar-password");
+      } else {
+        navigate("/dashboard");
+      }
 
       navigate("/dashboard");
     } catch (error) {

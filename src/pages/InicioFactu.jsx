@@ -31,6 +31,7 @@ import AbmEmpresas from "./AbmEmpresas";
 import AbmUsuarios from "./AbmUsuarios";
 import SelectorEmpresa from "../componentes/SelectorEmpresa";
 import ImportarDatos from "./ImportarDatos";
+import CambiarPassword from "./CambiarPassword";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
 import SettingsIcon from "@mui/icons-material/Settings";
@@ -624,6 +625,7 @@ export default function InicioFactu() {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/importar-datos" element={<ImportarDatos />} />
             <Route path="/configuracion" element={<Configuracion />} />
+            <Route path="/cambiar-password" element={<CambiarPassword />} />
           </Routes>
         </Box>
       </Box>

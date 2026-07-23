@@ -339,6 +339,58 @@ app.post("/api/auth/usuarios", async (req, res) => {
   }
 });
 
+app.post("/api/auth/cambiar-password", async (req, res) => {
+  try {
+    const { auth_user_id, password } = req.body;
+
+    if (!auth_user_id || !password?.trim()) {
+      return res.status(400).json({
+        ok: false,
+        error: "Faltan datos.",
+      });
+    }
+
+    /*
+     * ACTUALIZAR CONTRASEÑA EN SUPABASE AUTH
+     */
+    const { error: authError } = await supabase.auth.admin.updateUserById(
+      auth_user_id,
+      {
+        password: password.trim(),
+      },
+    );
+
+    if (authError) {
+      throw authError;
+    }
+
+    /*
+     * YA NO DEBE CAMBIAR LA CONTRASEÑA
+     */
+    const { error: errorUsuario } = await supabase
+      .from("usuarios")
+      .update({
+        debe_cambiar_password: false,
+      })
+      .eq("auth_user_id", auth_user_id);
+
+    if (errorUsuario) {
+      throw errorUsuario;
+    }
+
+    return res.json({
+      ok: true,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+
 app.get("/api/fiscal/token", async (req, res) => {
   try {
     const auth = await obtenerTokenSign();
