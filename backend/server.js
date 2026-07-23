@@ -224,6 +224,119 @@ app.post("/api/auth/login", async (req, res) => {
   }
 });
 
+app.post("/api/auth/usuarios", async (req, res) => {
+  try {
+    const { nombre, usuario, email, password, idEmpresa, rol } = req.body;
+
+    const nombreLimpio = String(nombre || "").trim();
+    const usuarioLimpio = String(usuario || "")
+      .trim()
+      .toLowerCase();
+    const emailLimpio = String(email || "")
+      .trim()
+      .toLowerCase();
+    const passwordLimpia = String(password || "");
+
+    if (
+      !nombreLimpio ||
+      !usuarioLimpio ||
+      !emailLimpio ||
+      !passwordLimpia ||
+      !idEmpresa
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "Complete nombre, usuario, email, contraseña y empresa.",
+      });
+    }
+
+    const { data: usuarioExistente } = await supabase
+      .from("usuarios")
+      .select("id")
+      .or(`usuario.ilike.${usuarioLimpio},email.ilike.${emailLimpio}`)
+      .maybeSingle();
+
+    if (usuarioExistente) {
+      return res.status(409).json({
+        ok: false,
+        error: "El usuario o el email ya están registrados.",
+      });
+    }
+
+    const { data: authCreado, error: authError } =
+      await supabase.auth.admin.createUser({
+        email: emailLimpio,
+        password: passwordLimpia,
+        email_confirm: true,
+        user_metadata: {
+          nombre: nombreLimpio,
+          usuario: usuarioLimpio,
+        },
+      });
+
+    if (authError || !authCreado?.user) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          authError?.message || "No se pudo crear el usuario en Supabase Auth.",
+      });
+    }
+
+    const authUserId = authCreado.user.id;
+
+    const { data: usuarioCreado, error: errorUsuario } = await supabase
+      .from("usuarios")
+      .insert([
+        {
+          nombre: nombreLimpio,
+          usuario: usuarioLimpio,
+          email: emailLimpio,
+          rol_global: "usuario",
+          activo: true,
+          auth_user_id: authUserId,
+        },
+      ])
+      .select("id")
+      .single();
+
+    if (errorUsuario) {
+      await supabase.auth.admin.deleteUser(authUserId);
+      throw errorUsuario;
+    }
+
+    const { error: errorRelacion } = await supabase
+      .from("usuario_empresa")
+      .insert([
+        {
+          idusuario: usuarioCreado.id,
+          idempresa: idEmpresa,
+          rol,
+          activo: true,
+        },
+      ]);
+
+    if (errorRelacion) {
+      await supabase.from("usuarios").delete().eq("id", usuarioCreado.id);
+
+      await supabase.auth.admin.deleteUser(authUserId);
+
+      throw errorRelacion;
+    }
+
+    return res.status(201).json({
+      ok: true,
+      mensaje: "Usuario creado correctamente.",
+    });
+  } catch (error) {
+    console.error("Error creando usuario:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "No se pudo crear el usuario.",
+    });
+  }
+});
+
 app.get("/api/fiscal/token", async (req, res) => {
   try {
     const auth = await obtenerTokenSign();
@@ -478,96 +591,80 @@ app.get("/api/fiscal/condiciones-iva", async (req, res) => {
     });
   }
 });
-app.get(
-  "/api/fiscal/certificado/estado/:cuitEmpresa",
-  async (req, res) => {
-    try {
-      const cuitBuscado = String(
-        req.params.cuitEmpresa || "",
-      ).replace(/\D/g, "");
+app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
+  try {
+    const cuitBuscado = String(req.params.cuitEmpresa || "").replace(/\D/g, "");
 
-      const { data: empresas, error } = await supabase
-        .from("empresas")
-        .select("id, razon_social, cuit, certificado_crt");
+    const { data: empresas, error } = await supabase
+      .from("empresas")
+      .select("id, razon_social, cuit, certificado_crt");
 
-      if (error) {
-        throw error;
-      }
+    if (error) {
+      throw error;
+    }
 
-      const empresa = (empresas || []).find(
-        (item) =>
-          String(item.cuit || "").replace(/\D/g, "") ===
-          cuitBuscado,
-      );
+    const empresa = (empresas || []).find(
+      (item) => String(item.cuit || "").replace(/\D/g, "") === cuitBuscado,
+    );
 
-      if (!empresa) {
-        return res.status(404).json({
-          ok: false,
-          error: "No se encontró la empresa para ese CUIT",
-        });
-      }
-
-      if (!empresa.certificado_crt) {
-        return res.status(200).json({
-          ok: true,
-          estado: "sin_certificado",
-          vence: null,
-          diasRestantes: null,
-        });
-      }
-
-      const { data: certFile, error: certError } =
-        await supabase.storage
-          .from("afip-certificados")
-          .download(empresa.certificado_crt);
-
-      if (certError) {
-        throw certError;
-      }
-
-      const certPem = Buffer.from(
-        await certFile.arrayBuffer(),
-      ).toString("utf8");
-
-      const cert = forge.pki.certificateFromPem(certPem);
-
-      const vence = cert.validity.notAfter;
-      const hoy = new Date();
-
-      const diasRestantes = Math.ceil(
-        (vence.getTime() - hoy.getTime()) /
-          (1000 * 60 * 60 * 24),
-      );
-
-      let estado = "vigente";
-
-      if (diasRestantes <= 0) {
-        estado = "vencido";
-      } else if (diasRestantes <= 30) {
-        estado = "por_vencer";
-      }
-
-      return res.json({
-        ok: true,
-        estado,
-        vence,
-        diasRestantes,
-      });
-    } catch (error) {
-      console.error(
-        "Error consultando estado del certificado:",
-        error,
-      );
-
-      return res.status(500).json({
+    if (!empresa) {
+      return res.status(404).json({
         ok: false,
-        error:
-          error?.message ||
-          "No se pudo consultar el certificado",
+        error: "No se encontró la empresa para ese CUIT",
       });
     }
-  },
-);
+
+    if (!empresa.certificado_crt) {
+      return res.status(200).json({
+        ok: true,
+        estado: "sin_certificado",
+        vence: null,
+        diasRestantes: null,
+      });
+    }
+
+    const { data: certFile, error: certError } = await supabase.storage
+      .from("afip-certificados")
+      .download(empresa.certificado_crt);
+
+    if (certError) {
+      throw certError;
+    }
+
+    const certPem = Buffer.from(await certFile.arrayBuffer()).toString("utf8");
+
+    const cert = forge.pki.certificateFromPem(certPem);
+
+    const vence = cert.validity.notAfter;
+    const hoy = new Date();
+
+    const diasRestantes = Math.ceil(
+      (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    let estado = "vigente";
+
+    if (diasRestantes <= 0) {
+      estado = "vencido";
+    } else if (diasRestantes <= 30) {
+      estado = "por_vencer";
+    }
+
+    return res.json({
+      ok: true,
+      estado,
+      vence,
+      diasRestantes,
+    });
+  } catch (error) {
+    console.error("Error consultando estado del certificado:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "No se pudo consultar el certificado",
+    });
+  }
+});
 
 app.post("/api/email/factura", async (req, res) => {
   try {
