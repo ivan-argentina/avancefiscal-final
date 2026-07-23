@@ -341,22 +341,65 @@ app.post("/api/auth/usuarios", async (req, res) => {
 
 app.post("/api/auth/cambiar-password", async (req, res) => {
   try {
-    const { auth_user_id, password } = req.body;
+    const authorization = String(req.headers.authorization || "");
 
-    if (!auth_user_id || !password?.trim()) {
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    const passwordNueva = String(req.body.password || "").trim();
+
+    if (!accessToken) {
+      return res.status(401).json({
+        ok: false,
+        error: "Sesión no válida.",
+      });
+    }
+
+    if (!passwordNueva) {
       return res.status(400).json({
         ok: false,
-        error: "Faltan datos.",
+        error: "Ingresá la nueva contraseña.",
+      });
+    }
+
+    const passwordValida =
+      passwordNueva.length >= 8 &&
+      /[A-Z]/.test(passwordNueva) &&
+      /[a-z]/.test(passwordNueva) &&
+      /\d/.test(passwordNueva);
+
+    if (!passwordValida) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.",
       });
     }
 
     /*
-     * ACTUALIZAR CONTRASEÑA EN SUPABASE AUTH
+     * Validamos el JWT contra Supabase Auth.
+     * No confiamos en un auth_user_id enviado por React.
+     */
+    const {
+      data: { user: authUser },
+      error: userError,
+    } = await supabaseAuth.auth.getUser(accessToken);
+
+    if (userError || !authUser) {
+      return res.status(401).json({
+        ok: false,
+        error: "La sesión venció o no es válida.",
+      });
+    }
+
+    /*
+     * Cambiamos la contraseña del usuario autenticado.
      */
     const { error: authError } = await supabase.auth.admin.updateUserById(
-      auth_user_id,
+      authUser.id,
       {
-        password: password.trim(),
+        password: passwordNueva,
       },
     );
 
@@ -365,28 +408,38 @@ app.post("/api/auth/cambiar-password", async (req, res) => {
     }
 
     /*
-     * YA NO DEBE CAMBIAR LA CONTRASEÑA
+     * Quitamos la obligación de cambiarla nuevamente.
      */
-    const { error: errorUsuario } = await supabase
+    const { data: usuarioActualizado, error: usuarioError } = await supabase
       .from("usuarios")
       .update({
         debe_cambiar_password: false,
       })
-      .eq("auth_user_id", auth_user_id);
+      .eq("auth_user_id", authUser.id)
+      .select("id, debe_cambiar_password")
+      .maybeSingle();
 
-    if (errorUsuario) {
-      throw errorUsuario;
+    if (usuarioError) {
+      throw usuarioError;
+    }
+
+    if (!usuarioActualizado) {
+      return res.status(404).json({
+        ok: false,
+        error: "No se encontró el usuario vinculado a la sesión.",
+      });
     }
 
     return res.json({
       ok: true,
+      mensaje: "Contraseña actualizada correctamente.",
     });
   } catch (error) {
-    console.error(error);
+    console.error("Error cambiando contraseña:", error);
 
     return res.status(500).json({
       ok: false,
-      error: error.message,
+      error: error?.message || "No se pudo cambiar la contraseña.",
     });
   }
 });
