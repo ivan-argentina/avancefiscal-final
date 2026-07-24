@@ -4,7 +4,7 @@ import { importarCiudades } from "../utils/importador/importarCiudades";
 import DialogDetalleImportacion from "../componentes/importador/DialogDetalleImportacion";
 import TarjetaResumenImportacion from "../componentes/importador/TarjetaResumenImportacion";
 import { importarFamilias } from "../utils/importador/importarFamilias";
-import { importarArticulos } from "../utils/importador/importarArticulos";
+import { importarArticulos } from "../utils/importador/ImportarArticulos";
 import { useState } from "react";
 import * as XLSX from "xlsx";
 import {
