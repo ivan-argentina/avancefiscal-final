@@ -6,8 +6,15 @@ import {
   Alert,
   Box,
   Button,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
   IconButton,
   InputAdornment,
+  Link,
   Paper,
   Snackbar,
   TextField,
@@ -16,23 +23,37 @@ import {
 
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
 
 export default function Login() {
   const navigate = useNavigate();
 
   const [usuarioLogin, setUsuarioLogin] = useState("");
   const [password, setPassword] = useState("");
+
+  const [ingresando, setIngresando] = useState(false);
+  const [mostrarPassword, setMostrarPassword] = useState(false);
+
+  /*
+   * RECUPERACIÓN DE CONTRASEÑA
+   */
+  const [openRecuperar, setOpenRecuperar] = useState(false);
+  const [emailRecuperar, setEmailRecuperar] = useState("");
+  const [enviandoRecuperacion, setEnviandoRecuperacion] = useState(false);
+
+  /*
+   * NOTIFICACIONES
+   */
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("error");
   const [openMensaje, setOpenMensaje] = useState(false);
-  const [ingresando, setIngresando] = useState(false);
-  const [mostrarPassword, setMostrarPassword] = useState(false);
 
   const passwordRef = useRef(null);
 
   /*
    * En desarrollo usa localhost.
-   * En producción usa la variable configurada en Vercel.
+   * En producción usa VITE_API_URL configurada en Vercel.
    */
   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
@@ -42,6 +63,9 @@ export default function Login() {
     setOpenMensaje(true);
   };
 
+  /*
+   * LOGIN
+   */
   const ingresar = async () => {
     const usuarioBuscado = usuarioLogin.trim().toLowerCase();
     const passwordIngresada = password;
@@ -55,8 +79,7 @@ export default function Login() {
       setIngresando(true);
 
       /*
-       * Limpiamos cualquier sesión anterior antes de iniciar
-       * una nueva autenticación.
+       * Limpiamos cualquier sesión anterior.
        */
       await supabase.auth.signOut();
 
@@ -95,9 +118,7 @@ export default function Login() {
       }
 
       /*
-       * Registramos la sesión en el cliente de Supabase.
-       * A partir de acá, todas las consultas llevan el JWT
-       * necesario para que funcionen las políticas RLS.
+       * Registramos la sesión en Supabase.
        */
       const { data: sessionData, error: sessionError } =
         await supabase.auth.setSession({
@@ -116,22 +137,18 @@ export default function Login() {
       }
 
       /*
-       * Conservamos el formato actual para no romper
-       * los demás módulos de Avance Fiscal.
+       * Conservamos el formato utilizado por los módulos.
        */
       localStorage.setItem("usuario", JSON.stringify(resultado.usuario));
-      localStorage.setItem("empresa", JSON.stringify(resultado.empresa));
 
-      /*
-       * Al iniciar sesión dejamos seleccionada la primera
-       * empresa activa devuelta por el backend.
-       */
+      localStorage.setItem("empresa", JSON.stringify(resultado.empresa));
 
       localStorage.setItem("empresaActiva", JSON.stringify(resultado.empresa));
 
+      /*
+       * Primer ingreso con contraseña provisoria.
+       */
       if (resultado.usuario.debe_cambiar_password === true) {
-        console.log("Redirigiendo a cambiar contraseña");
-
         navigate("/cambiar-password", {
           replace: true,
         });
@@ -162,6 +179,75 @@ export default function Login() {
     }
   };
 
+  /*
+   * ENVIAR EMAIL DE RECUPERACIÓN
+   */
+  const enviarRecuperacion = async () => {
+    const emailLimpio = emailRecuperar.trim().toLowerCase();
+
+    if (!emailLimpio) {
+      mostrarNotificacion("Ingresá el email asociado a tu usuario.", "warning");
+      return;
+    }
+
+    const formatoEmailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpio);
+
+    if (!formatoEmailValido) {
+      mostrarNotificacion("Ingresá un email válido.", "warning");
+      return;
+    }
+
+    try {
+      setEnviandoRecuperacion(true);
+
+      /*
+       * En producción:
+       * https://avancefiscal.com.ar/restablecer-password
+       *
+       * En desarrollo:
+       * http://localhost:5173/restablecer-password
+       */
+      const redirectTo = `${window.location.origin}/restablecer-password`;
+
+      const { error } = await supabase.auth.resetPasswordForEmail(emailLimpio, {
+        redirectTo,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setOpenRecuperar(false);
+      setEmailRecuperar("");
+
+      mostrarNotificacion(
+        "Si el email está registrado, recibirás un enlace para restablecer la contraseña.",
+        "success",
+      );
+    } catch (error) {
+      console.error("Error enviando recuperación:", error);
+
+      mostrarNotificacion(
+        "No se pudo enviar el correo de recuperación.",
+        "error",
+      );
+    } finally {
+      setEnviandoRecuperacion(false);
+    }
+  };
+
+  const abrirRecuperacion = () => {
+    setEmailRecuperar("");
+    setOpenRecuperar(true);
+  };
+
+  const cerrarRecuperacion = () => {
+    if (!enviandoRecuperacion) {
+      setOpenRecuperar(false);
+      setEmailRecuperar("");
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -169,18 +255,84 @@ export default function Login() {
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        bgcolor: "#f5f5f5",
+        px: 2,
+        py: 4,
+        background:
+          "linear-gradient(135deg, #eef5ff 0%, #f8fafc 50%, #edf7f4 100%)",
       }}
     >
       <Paper
+        elevation={8}
         sx={{
-          p: 4,
-          width: 360,
-          borderRadius: 3,
+          width: "100%",
+          maxWidth: 430,
+          px: {
+            xs: 3,
+            sm: 4,
+          },
+          py: 4,
+          borderRadius: 4,
+          border: "1px solid",
+          borderColor: "divider",
         }}
       >
-        <Typography variant="h5" fontWeight="bold" mb={3}>
-          Iniciar Sesión
+        {/* LOGO PROVISORIO */}
+        <Box
+          sx={{
+            width: 68,
+            height: 68,
+            borderRadius: "20px",
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            mx: "auto",
+            mb: 2,
+            boxShadow: 3,
+          }}
+        >
+          <Typography variant="h4" fontWeight="bold">
+            A
+          </Typography>
+        </Box>
+
+        <Typography
+          variant="h4"
+          fontWeight="bold"
+          textAlign="center"
+          color="primary.main"
+        >
+          Avance Fiscal
+        </Typography>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mt: 0.5 }}
+        >
+          Facturación, stock y gestión en un solo lugar
+        </Typography>
+
+        <Divider sx={{ my: 3 }} />
+
+        <Typography
+          variant="h6"
+          fontWeight="bold"
+          textAlign="center"
+          sx={{ mb: 0.5 }}
+        >
+          Iniciar sesión
+        </Typography>
+
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          textAlign="center"
+          sx={{ mb: 3 }}
+        >
+          Ingresá tus datos para acceder al sistema
         </Typography>
 
         <TextField
@@ -190,12 +342,16 @@ export default function Login() {
           value={usuarioLogin}
           disabled={ingresando}
           autoComplete="username"
+          autoFocus
           onChange={(e) => setUsuarioLogin(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
               passwordRef.current?.focus();
             }
+          }}
+          slotProps={{
+            input: {},
           }}
         />
 
@@ -207,7 +363,7 @@ export default function Login() {
           value={password}
           disabled={ingresando}
           autoComplete="current-password"
-          sx={{ mt: 1 }}
+          sx={{ mt: 2 }}
           inputRef={passwordRef}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => {
@@ -218,6 +374,11 @@ export default function Login() {
           }}
           slotProps={{
             input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockOutlinedIcon fontSize="small" color="action" />
+                </InputAdornment>
+              ),
               endAdornment: (
                 <InputAdornment position="end">
                   <IconButton
@@ -240,20 +401,127 @@ export default function Login() {
           }}
         />
 
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mt: 1,
+          }}
+        >
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            disabled={ingresando}
+            onClick={abrirRecuperacion}
+            sx={{
+              fontSize: "0.875rem",
+              cursor: ingresando ? "default" : "pointer",
+            }}
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </Box>
+
         <Button
           variant="contained"
           fullWidth
-          sx={{ mt: 2 }}
+          size="large"
+          sx={{
+            mt: 3,
+            py: 1.2,
+            borderRadius: 2,
+            fontWeight: "bold",
+          }}
           onClick={ingresar}
           disabled={ingresando}
+          startIcon={
+            ingresando ? <CircularProgress size={18} color="inherit" /> : null
+          }
         >
           {ingresando ? "INGRESANDO..." : "INGRESAR"}
         </Button>
+
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          textAlign="center"
+          display="block"
+          sx={{ mt: 3 }}
+        >
+          Gestión inteligente para tu empresa
+        </Typography>
       </Paper>
+
+      {/* DIÁLOGO DE RECUPERACIÓN */}
+      <Dialog
+        open={openRecuperar}
+        onClose={cerrarRecuperacion}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle fontWeight="bold">Recuperar contraseña</DialogTitle>
+
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Ingresá el email asociado a tu usuario. Te enviaremos un enlace para
+            elegir una nueva contraseña.
+          </Typography>
+
+          <TextField
+            label="Email"
+            type="email"
+            fullWidth
+            autoFocus
+            value={emailRecuperar}
+            disabled={enviandoRecuperacion}
+            autoComplete="email"
+            onChange={(e) => setEmailRecuperar(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !enviandoRecuperacion) {
+                e.preventDefault();
+                enviarRecuperacion();
+              }
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailOutlinedIcon color="action" />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 2,
+          }}
+        >
+          <Button
+            color="inherit"
+            disabled={enviandoRecuperacion}
+            onClick={cerrarRecuperacion}
+          >
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            disabled={enviandoRecuperacion}
+            onClick={enviarRecuperacion}
+          >
+            {enviandoRecuperacion ? "ENVIANDO..." : "ENVIAR ENLACE"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={openMensaje}
-        autoHideDuration={4000}
+        autoHideDuration={5000}
         onClose={() => setOpenMensaje(false)}
         anchorOrigin={{
           vertical: "top",

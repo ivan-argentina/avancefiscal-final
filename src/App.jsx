@@ -1,8 +1,9 @@
 import InicioFactu from "./pages/InicioFactu";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
+import CambiarPassword from "./pages/CambiarPassword";
 import Login from "./pages/Login";
 
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { Routes, Route } from "react-router-dom";
 
 const theme = createTheme({
   typography: {
@@ -14,10 +15,12 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <Routes>
-        {/*Login */}
+        {/* Rutas públicas */}
         <Route path="/" element={<Login />} />
 
-        {/*Sistema*/}
+        <Route path="/restablecer-password" element={<CambiarPassword />} />
+
+        {/* Sistema */}
         <Route path="/*" element={<InicioFactu />} />
       </Routes>
     </ThemeProvider>

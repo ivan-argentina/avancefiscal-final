@@ -31,12 +31,11 @@ import AbmEmpresas from "./AbmEmpresas";
 import AbmUsuarios from "./AbmUsuarios";
 import SelectorEmpresa from "../componentes/SelectorEmpresa";
 import ImportarDatos from "./ImportarDatos";
-import CambiarPassword from "./CambiarPassword";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
 import SettingsIcon from "@mui/icons-material/Settings";
+import CambiarPassword from "./CambiarPassword";
 import { supabase } from "../hook/supabaseClient";
-
 const drawerWidth = 200;
 
 export default function InicioFactu() {

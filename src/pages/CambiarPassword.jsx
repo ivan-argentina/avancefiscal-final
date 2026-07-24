@@ -1,11 +1,13 @@
-import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+
 import { supabase } from "../hook/supabaseClient";
 
 import {
   Alert,
   Box,
   Button,
+  CircularProgress,
   IconButton,
   InputAdornment,
   LinearProgress,
@@ -19,31 +21,148 @@ import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import LockResetIcon from "@mui/icons-material/LockReset";
 
 export default function CambiarPassword() {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /*
+   * Este mismo componente trabaja en dos modos:
+   *
+   * /cambiar-password:
+   * cambio obligatorio luego del primer ingreso.
+   *
+   * /restablecer-password:
+   * recuperación iniciada desde el email de Supabase.
+   */
+  const esRecuperacion = location.pathname === "/restablecer-password";
 
   const [passwordNueva, setPasswordNueva] = useState("");
+
   const [repetirPassword, setRepetirPassword] = useState("");
 
   const [mostrarPassword, setMostrarPassword] = useState(false);
+
   const [mostrarRepeticion, setMostrarRepeticion] = useState(false);
 
   const [guardando, setGuardando] = useState(false);
 
+  /*
+   * Solo se utiliza al ingresar desde el email
+   * de recuperación.
+   */
+  const [verificandoSesion, setVerificandoSesion] = useState(esRecuperacion);
+
+  const [sesionRecuperacionValida, setSesionRecuperacionValida] =
+    useState(!esRecuperacion);
+
+  /*
+   * NOTIFICACIONES
+   */
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("error");
+
   const [openMensaje, setOpenMensaje] = useState(false);
 
-  const API_URL =
-    import.meta.env.VITE_API_URL ||
-    "https://gestion-production-e3f6.up.railway.app";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
   const mostrarNotificacion = (texto, tipo = "error") => {
     setMensaje(texto);
     setTipoMensaje(tipo);
     setOpenMensaje(true);
   };
+
+  /*
+   * Cuando el usuario llega desde el email,
+   * Supabase procesa el enlace y crea una sesión
+   * temporal de recuperación.
+   */
+  useEffect(() => {
+    if (!esRecuperacion) {
+      return undefined;
+    }
+
+    let componenteActivo = true;
+    let temporizador = null;
+
+    const marcarSesion = (session) => {
+      if (!componenteActivo) {
+        return;
+      }
+
+      if (session?.access_token) {
+        setSesionRecuperacionValida(true);
+        setVerificandoSesion(false);
+
+        if (temporizador) {
+          clearTimeout(temporizador);
+        }
+      }
+    };
+
+    const validarSesionInicial = async () => {
+      try {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          throw error;
+        }
+
+        if (session?.access_token) {
+          marcarSesion(session);
+          return;
+        }
+
+        /*
+         * Le damos unos instantes a Supabase para
+         * procesar el token incluido en la URL.
+         */
+        temporizador = setTimeout(() => {
+          if (!componenteActivo) {
+            return;
+          }
+
+          setSesionRecuperacionValida(false);
+          setVerificandoSesion(false);
+        }, 1500);
+      } catch (error) {
+        console.error("Error validando la recuperación:", error);
+
+        if (componenteActivo) {
+          setSesionRecuperacionValida(false);
+          setVerificandoSesion(false);
+        }
+      }
+    };
+
+    /*
+     * PASSWORD_RECOVERY se dispara cuando Supabase
+     * reconoce correctamente el enlace enviado.
+     */
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((evento, session) => {
+      if (evento === "PASSWORD_RECOVERY" || evento === "SIGNED_IN") {
+        marcarSesion(session);
+      }
+    });
+
+    validarSesionInicial();
+
+    return () => {
+      componenteActivo = false;
+
+      if (temporizador) {
+        clearTimeout(temporizador);
+      }
+
+      subscription.unsubscribe();
+    };
+  }, [esRecuperacion]);
 
   /*
    * POLÍTICA DE CONTRASEÑA
@@ -67,29 +186,53 @@ export default function CambiarPassword() {
     requisitos.coinciden;
 
   /*
-   * Calculamos una fortaleza visual sencilla.
+   * FORTALEZA VISUAL
    */
   const fortaleza = useMemo(() => {
     let puntos = 0;
 
-    if (requisitos.largoMinimo) puntos += 25;
-    if (requisitos.tieneMayuscula) puntos += 25;
-    if (requisitos.tieneMinuscula) puntos += 25;
-    if (requisitos.tieneNumero) puntos += 25;
+    if (requisitos.largoMinimo) {
+      puntos += 25;
+    }
+
+    if (requisitos.tieneMayuscula) {
+      puntos += 25;
+    }
+
+    if (requisitos.tieneMinuscula) {
+      puntos += 25;
+    }
+
+    if (requisitos.tieneNumero) {
+      puntos += 25;
+    }
 
     return puntos;
   }, [requisitos]);
 
   const textoFortaleza = useMemo(() => {
-    if (!passwordNueva) return "Sin ingresar";
+    if (!passwordNueva) {
+      return "Sin ingresar";
+    }
 
-    if (fortaleza <= 25) return "Débil";
-    if (fortaleza <= 50) return "Regular";
-    if (fortaleza <= 75) return "Buena";
+    if (fortaleza <= 25) {
+      return "Débil";
+    }
+
+    if (fortaleza <= 50) {
+      return "Regular";
+    }
+
+    if (fortaleza <= 75) {
+      return "Buena";
+    }
 
     return "Muy segura";
   }, [fortaleza, passwordNueva]);
 
+  /*
+   * CAMBIO O RESTABLECIMIENTO
+   */
   const cambiarPassword = async () => {
     if (!passwordNueva || !repetirPassword) {
       mostrarNotificacion("Complete los dos campos de contraseña.", "warning");
@@ -107,9 +250,6 @@ export default function CambiarPassword() {
     try {
       setGuardando(true);
 
-      /*
-       * Obtenemos la sesión autenticada de Supabase.
-       */
       const {
         data: { session },
         error: sessionError,
@@ -120,27 +260,56 @@ export default function CambiarPassword() {
       }
 
       if (!session?.access_token) {
+        throw new Error(
+          esRecuperacion
+            ? "El enlace venció o no es válido. Solicitá uno nuevo."
+            : "La sesión venció. Iniciá sesión nuevamente.",
+        );
+      }
+
+      if (esRecuperacion) {
+        /*
+         * RECUPERACIÓN POR EMAIL
+         *
+         * La sesión temporal fue generada por el enlace
+         * enviado por Supabase.
+         */
+        const { error: updateError } = await supabase.auth.updateUser({
+          password: passwordNueva,
+        });
+
+        if (updateError) {
+          throw updateError;
+        }
+
         mostrarNotificacion(
-          "La sesión venció. Iniciá sesión nuevamente.",
-          "warning",
+          "Contraseña restablecida correctamente.",
+          "success",
         );
 
-        localStorage.removeItem("usuario");
-        localStorage.removeItem("empresa");
-        localStorage.removeItem("empresaActiva");
+        /*
+         * Cerramos la sesión temporal de recuperación.
+         */
+        setTimeout(async () => {
+          await supabase.auth.signOut();
 
-        await supabase.auth.signOut();
+          localStorage.removeItem("usuario");
+          localStorage.removeItem("empresa");
+          localStorage.removeItem("empresaActiva");
 
-        navigate("/login", {
-          replace: true,
-        });
+          navigate("/", {
+            replace: true,
+          });
+        }, 1500);
 
         return;
       }
 
       /*
-       * El backend identifica al usuario por el JWT.
-       * No enviamos auth_user_id desde React.
+       * PRIMER INGRESO
+       *
+       * El backend cambia la contraseña y actualiza:
+       * debe_cambiar_password = false.
        */
       const respuesta = await fetch(`${API_URL}/api/auth/cambiar-password`, {
         method: "POST",
@@ -168,8 +337,8 @@ export default function CambiarPassword() {
       }
 
       /*
-       * Actualizamos también el usuario guardado localmente,
-       * para que la aplicación ya no vuelva a redirigirlo.
+       * Actualizamos también el usuario guardado
+       * localmente.
        */
       const usuarioGuardado = JSON.parse(
         localStorage.getItem("usuario") || "null",
@@ -204,6 +373,18 @@ export default function CambiarPassword() {
     }
   };
 
+  const volverAlLogin = async () => {
+    await supabase.auth.signOut();
+
+    localStorage.removeItem("usuario");
+    localStorage.removeItem("empresa");
+    localStorage.removeItem("empresaActiva");
+
+    navigate("/", {
+      replace: true,
+    });
+  };
+
   const Requisito = ({ cumplido, children }) => (
     <Box
       sx={{
@@ -228,20 +409,102 @@ export default function CambiarPassword() {
     </Box>
   );
 
+  /*
+   * ESPERA MIENTRAS SUPABASE PROCESA EL ENLACE
+   */
+  if (esRecuperacion && verificandoSesion) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: 2,
+          background:
+            "linear-gradient(135deg, #eef5ff 0%, #f8fafc 50%, #edf7f4 100%)",
+        }}
+      >
+        <CircularProgress />
+
+        <Typography color="text.secondary">
+          Validando el enlace de recuperación...
+        </Typography>
+      </Box>
+    );
+  }
+
+  /*
+   * ENLACE VENCIDO O INVÁLIDO
+   */
+  if (esRecuperacion && !sesionRecuperacionValida) {
+    return (
+      <Box
+        sx={{
+          minHeight: "100vh",
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          px: 2,
+          background:
+            "linear-gradient(135deg, #eef5ff 0%, #f8fafc 50%, #edf7f4 100%)",
+        }}
+      >
+        <Paper
+          elevation={6}
+          sx={{
+            width: "100%",
+            maxWidth: 460,
+            p: 4,
+            borderRadius: 4,
+            textAlign: "center",
+          }}
+        >
+          <CancelIcon
+            color="error"
+            sx={{
+              fontSize: 64,
+              mb: 1,
+            }}
+          />
+
+          <Typography variant="h5" fontWeight="bold">
+            Enlace no válido
+          </Typography>
+
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ mt: 1, mb: 3 }}
+          >
+            El enlace de recuperación venció, ya fue utilizado o no es válido.
+            Solicitá uno nuevo desde el login.
+          </Typography>
+
+          <Button variant="contained" fullWidth onClick={volverAlLogin}>
+            VOLVER AL LOGIN
+          </Button>
+        </Paper>
+      </Box>
+    );
+  }
+
   return (
     <Box
       sx={{
-        minHeight: "calc(100vh - 100px)",
+        minHeight: esRecuperacion ? "100vh" : "calc(100vh - 100px)",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
         px: 2,
         py: 4,
-        bgcolor: "#f5f5f5",
+        background:
+          "linear-gradient(135deg, #eef5ff 0%, #f8fafc 50%, #edf7f4 100%)",
       }}
     >
       <Paper
-        elevation={4}
+        elevation={6}
         sx={{
           width: "100%",
           maxWidth: 470,
@@ -249,11 +512,36 @@ export default function CambiarPassword() {
             xs: 3,
             sm: 4,
           },
-          borderRadius: 3,
+          borderRadius: 4,
+          border: "1px solid",
+          borderColor: "divider",
         }}
       >
-        <Typography variant="h5" fontWeight="bold" textAlign="center">
-          Cambiar contraseña
+        <Box
+          sx={{
+            width: 64,
+            height: 64,
+            borderRadius: "20px",
+            bgcolor: "primary.main",
+            color: "primary.contrastText",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            mx: "auto",
+            mb: 2,
+            boxShadow: 3,
+          }}
+        >
+          <LockResetIcon sx={{ fontSize: 34 }} />
+        </Box>
+
+        <Typography
+          variant="h5"
+          fontWeight="bold"
+          textAlign="center"
+          color="primary.main"
+        >
+          {esRecuperacion ? "Restablecer contraseña" : "Cambiar contraseña"}
         </Typography>
 
         <Typography
@@ -262,8 +550,9 @@ export default function CambiarPassword() {
           textAlign="center"
           sx={{ mt: 1, mb: 3 }}
         >
-          Por seguridad, debés reemplazar la contraseña provisoria antes de
-          continuar.
+          {esRecuperacion
+            ? "Ingresá una nueva contraseña para volver a acceder a Avance Fiscal."
+            : "Por seguridad, debés reemplazar la contraseña provisoria antes de continuar."}
         </Typography>
 
         <TextField
@@ -405,8 +694,17 @@ export default function CambiarPassword() {
           size="large"
           disabled={!passwordValida || guardando}
           onClick={cambiarPassword}
+          startIcon={
+            guardando ? <CircularProgress size={18} color="inherit" /> : null
+          }
         >
-          {guardando ? "CAMBIANDO CONTRASEÑA..." : "CAMBIAR CONTRASEÑA"}
+          {guardando
+            ? esRecuperacion
+              ? "RESTABLECIENDO..."
+              : "CAMBIANDO..."
+            : esRecuperacion
+              ? "RESTABLECER CONTRASEÑA"
+              : "CAMBIAR CONTRASEÑA"}
         </Button>
       </Paper>
 
