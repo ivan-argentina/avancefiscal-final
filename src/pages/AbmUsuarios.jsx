@@ -212,40 +212,35 @@ export default function AbmUsuarios() {
       setLoading(true);
 
       if (editandoId) {
-        /*
-         * EDICIÓN TEMPORAL:
-         * Por ahora actualiza directamente las tablas.
-         * Luego migraremos también la edición a Supabase Auth.
-         */
-        const datosUsuario = {
-          nombre: nombre.trim(),
-          usuario: usuario.trim().toLowerCase(),
-          email: email.trim().toLowerCase(),
-        };
+        const respuesta = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/auth/usuarios/${editandoId}`,
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              nombre: nombre.trim(),
+              usuario: usuario.trim(),
+              email: email.trim().toLowerCase(),
+              idEmpresa,
+              rol,
+            }),
+          },
+        );
 
-        if (password.trim()) {
-          datosUsuario.password = password.trim();
+        let resultado;
+
+        try {
+          resultado = await respuesta.json();
+        } catch {
+          throw new Error("El servidor no devolvió una respuesta válida.");
         }
 
-        const { error: errorUsuario } = await supabase
-          .from("usuarios")
-          .update(datosUsuario)
-          .eq("id", editandoId);
-
-        if (errorUsuario) {
-          throw errorUsuario;
-        }
-
-        const { error: errorRelacion } = await supabase
-          .from("usuario_empresa")
-          .update({
-            idempresa: idEmpresa,
-            rol,
-          })
-          .eq("id", relacionEditandoId);
-
-        if (errorRelacion) {
-          throw errorRelacion;
+        if (!respuesta.ok || !resultado?.ok) {
+          throw new Error(
+            resultado?.error || "No se pudo actualizar el usuario.",
+          );
         }
 
         setMensaje("Usuario actualizado correctamente");

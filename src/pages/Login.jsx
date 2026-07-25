@@ -81,7 +81,13 @@ export default function Login() {
       /*
        * Limpiamos cualquier sesión anterior.
        */
-      await supabase.auth.signOut();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        await supabase.auth.signOut();
+      }
 
       const respuesta = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",

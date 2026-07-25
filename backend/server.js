@@ -339,6 +339,168 @@ app.post("/api/auth/usuarios", async (req, res) => {
   }
 });
 
+app.put("/api/auth/usuarios/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nombre, usuario, email, idEmpresa, rol } = req.body;
+
+    const nombreLimpio = String(nombre || "").trim();
+    const usuarioLimpio = String(usuario || "")
+      .trim()
+      .toLowerCase();
+    const emailLimpio = String(email || "")
+      .trim()
+      .toLowerCase();
+
+    if (
+      !nombreLimpio ||
+      !usuarioLimpio ||
+      !emailLimpio ||
+      !idEmpresa
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "Complete nombre, usuario, email y empresa.",
+      });
+    }
+
+    /*
+     * Buscamos el usuario actual para obtener
+     * su auth_user_id y comparar el email.
+     */
+    const { data: usuarioActual, error: errorConsulta } =
+      await supabase
+        .from("usuarios")
+        .select("id, email, auth_user_id")
+        .eq("id", id)
+        .single();
+
+    if (errorConsulta || !usuarioActual) {
+      return res.status(404).json({
+        ok: false,
+        error: "No se encontró el usuario.",
+      });
+    }
+
+    if (!usuarioActual.auth_user_id) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "El usuario no está vinculado con Supabase Auth.",
+      });
+    }
+
+    /*
+     * Evitamos duplicar usuario o email en la tabla usuarios.
+     */
+    const { data: usuarioDuplicado, error: errorDuplicado } =
+      await supabase
+        .from("usuarios")
+        .select("id")
+        .or(
+          `usuario.ilike.${usuarioLimpio},email.ilike.${emailLimpio}`,
+        )
+        .neq("id", id)
+        .maybeSingle();
+
+    if (errorDuplicado) {
+      throw errorDuplicado;
+    }
+
+    if (usuarioDuplicado) {
+      return res.status(409).json({
+        ok: false,
+        error: "El usuario o el email ya están registrados.",
+      });
+    }
+
+    /*
+     * Si cambió el email, primero lo actualizamos en Auth.
+     */
+    const emailCambio =
+      String(usuarioActual.email || "").toLowerCase() !==
+      emailLimpio;
+
+    if (emailCambio) {
+      const { error: errorAuth } =
+        await supabase.auth.admin.updateUserById(
+          usuarioActual.auth_user_id,
+          {
+            email: emailLimpio,
+            email_confirm: true,
+          },
+        );
+
+      if (errorAuth) {
+        return res.status(400).json({
+          ok: false,
+          error:
+            errorAuth.message ||
+            "No se pudo actualizar el email en Supabase Auth.",
+        });
+      }
+    }
+
+    /*
+     * Actualizamos la tabla usuarios.
+     */
+    const { error: errorUsuario } = await supabase
+      .from("usuarios")
+      .update({
+        nombre: nombreLimpio,
+        usuario: usuarioLimpio,
+        email: emailLimpio,
+      })
+      .eq("id", id);
+
+    if (errorUsuario) {
+      /*
+       * Si Auth se actualizó pero la tabla falló,
+       * intentamos volver al email anterior.
+       */
+      if (emailCambio) {
+        await supabase.auth.admin.updateUserById(
+          usuarioActual.auth_user_id,
+          {
+            email: usuarioActual.email,
+            email_confirm: true,
+          },
+        );
+      }
+
+      throw errorUsuario;
+    }
+
+    /*
+     * Actualizamos empresa y rol.
+     */
+    const { error: errorRelacion } = await supabase
+      .from("usuario_empresa")
+      .update({
+        idempresa: idEmpresa,
+        rol,
+      })
+      .eq("idusuario", id);
+
+    if (errorRelacion) {
+      throw errorRelacion;
+    }
+
+    return res.json({
+      ok: true,
+      mensaje: "Usuario actualizado correctamente.",
+    });
+  } catch (error) {
+    console.error("Error actualizando usuario:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error:
+        error?.message || "No se pudo actualizar el usuario.",
+    });
+  }
+});
+
 app.post("/api/auth/cambiar-password", async (req, res) => {
   try {
     const authorization = String(req.headers.authorization || "");
