@@ -352,18 +352,23 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
       .trim()
       .toLowerCase();
 
+<<<<<<< HEAD
     if (
       !nombreLimpio ||
       !usuarioLimpio ||
       !emailLimpio ||
       !idEmpresa
     ) {
+=======
+    if (!nombreLimpio || !usuarioLimpio || !emailLimpio || !idEmpresa) {
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
       return res.status(400).json({
         ok: false,
         error: "Complete nombre, usuario, email y empresa.",
       });
     }
 
+<<<<<<< HEAD
     /*
      * Buscamos el usuario actual para obtener
      * su auth_user_id y comparar el email.
@@ -374,6 +379,13 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
         .select("id, email, auth_user_id")
         .eq("id", id)
         .single();
+=======
+    const { data: usuarioActual, error: errorConsulta } = await supabase
+      .from("usuarios")
+      .select("id, email, auth_user_id")
+      .eq("id", id)
+      .single();
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
 
     if (errorConsulta || !usuarioActual) {
       return res.status(404).json({
@@ -385,6 +397,7 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
     if (!usuarioActual.auth_user_id) {
       return res.status(400).json({
         ok: false,
+<<<<<<< HEAD
         error:
           "El usuario no está vinculado con Supabase Auth.",
       });
@@ -402,6 +415,18 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
         )
         .neq("id", id)
         .maybeSingle();
+=======
+        error: "El usuario no está vinculado con Supabase Auth.",
+      });
+    }
+
+    const { data: usuarioDuplicado, error: errorDuplicado } = await supabase
+      .from("usuarios")
+      .select("id")
+      .or(`usuario.ilike.${usuarioLimpio},email.ilike.${emailLimpio}`)
+      .neq("id", id)
+      .maybeSingle();
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
 
     if (errorDuplicado) {
       throw errorDuplicado;
@@ -414,6 +439,7 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
     /*
      * Si cambió el email, primero lo actualizamos en Auth.
      */
@@ -430,6 +456,19 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
             email_confirm: true,
           },
         );
+=======
+    const emailCambio =
+      String(usuarioActual.email || "").toLowerCase() !== emailLimpio;
+
+    if (emailCambio) {
+      const { error: errorAuth } = await supabase.auth.admin.updateUserById(
+        usuarioActual.auth_user_id,
+        {
+          email: emailLimpio,
+          email_confirm: true,
+        },
+      );
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
 
       if (errorAuth) {
         return res.status(400).json({
@@ -441,9 +480,12 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
       }
     }
 
+<<<<<<< HEAD
     /*
      * Actualizamos la tabla usuarios.
      */
+=======
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
     const { error: errorUsuario } = await supabase
       .from("usuarios")
       .update({
@@ -454,6 +496,7 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
       .eq("id", id);
 
     if (errorUsuario) {
+<<<<<<< HEAD
       /*
        * Si Auth se actualizó pero la tabla falló,
        * intentamos volver al email anterior.
@@ -466,14 +509,24 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
             email_confirm: true,
           },
         );
+=======
+      if (emailCambio) {
+        await supabase.auth.admin.updateUserById(usuarioActual.auth_user_id, {
+          email: usuarioActual.email,
+          email_confirm: true,
+        });
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
       }
 
       throw errorUsuario;
     }
 
+<<<<<<< HEAD
     /*
      * Actualizamos empresa y rol.
      */
+=======
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
     const { error: errorRelacion } = await supabase
       .from("usuario_empresa")
       .update({
@@ -495,8 +548,12 @@ app.put("/api/auth/usuarios/:id", async (req, res) => {
 
     return res.status(500).json({
       ok: false,
+<<<<<<< HEAD
       error:
         error?.message || "No se pudo actualizar el usuario.",
+=======
+      error: error?.message || "No se pudo actualizar el usuario.",
+>>>>>>> 8e90da8 (Sincroniza edición de usuarios con Supabase Auth)
     });
   }
 });
