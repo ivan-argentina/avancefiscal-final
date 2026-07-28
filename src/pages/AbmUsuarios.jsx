@@ -252,48 +252,9 @@ export default function AbmUsuarios() {
 
         setMensaje("Usuario actualizado correctamente");
         setTipo("success");
-      } else {  setLoading(true);
-
-      if (editandoId) {
-        /*
-         * EDICIÓN TEMPORAL:
-         * Por ahora actualiza directamente las tablas.
-         * Luego migraremos también la edición a Supabase Auth.
-         */
-        const datosUsuario = {
-          nombre: nombre.trim(),
-          usuario: usuario.trim().toLowerCase(),
-          email: email.trim().toLowerCase(),
-        };
-
-        if (password.trim()) {
-          datosUsuario.password = password.trim();
-        }
-
-        const { error: errorUsuario } = await supabase
-          .from("usuarios")
-          .update(datosUsuario)
-          .eq("id", editandoId);
-
-        if (errorUsuario) {
-          throw errorUsuario;
-        }
-
-        const { error: errorRelacion } = await supabase
-          .from("usuario_empresa")
-          .update({
-            idempresa: idEmpresa,
-            rol,
-          })
-          .eq("id", relacionEditandoId);
-
-        if (errorRelacion) {
-          throw errorRelacion;
-        }
-
-        setMensaje("Usuario actualizado correctamente");
-        setTipo("success");
       } else {
+        setLoading(true);
+
         /*
          * NUEVO USUARIO:
          * El backend crea Supabase Auth, usuarios
