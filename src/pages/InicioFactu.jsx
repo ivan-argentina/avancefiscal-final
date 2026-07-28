@@ -625,6 +625,7 @@ export default function InicioFactu() {
             <Route path="/importar-datos" element={<ImportarDatos />} />
             <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/cambiar-password" element={<CambiarPassword />} />
+            <Route path="/restablecer-password" element={<CambiarPassword />} />
           </Routes>
         </Box>
       </Box>
