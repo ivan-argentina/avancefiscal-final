@@ -202,7 +202,7 @@ export default function AbmUsuarios() {
     }
 
     if (!editandoId && !password.trim()) {
-      setMensaje("Debe ingresar una contraseña");
+      setMensaje("Debe ingresar una contraseña temporal");
       setTipo("warning");
       setOpen(true);
       return;
@@ -211,59 +211,18 @@ export default function AbmUsuarios() {
     try {
       setLoading(true);
 
-      setLoading(true);
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
 
       if (editandoId) {
         /*
-         * EDICIÓN TEMPORAL:
-         * Por ahora actualiza directamente las tablas.
-         * Luego migraremos también la edición a Supabase Auth.
-         */
-        const datosUsuario = {
-          nombre: nombre.trim(),
-          usuario: usuario.trim().toLowerCase(),
-          email: email.trim().toLowerCase(),
-        };
-
-        if (password.trim()) {
-          datosUsuario.password = password.trim();
-        }
-
-        const { error: errorUsuario } = await supabase
-          .from("usuarios")
-          .update(datosUsuario)
-          .eq("id", editandoId);
-
-        if (errorUsuario) {
-          throw errorUsuario;
-        }
-
-        const { error: errorRelacion } = await supabase
-          .from("usuario_empresa")
-          .update({
-            idempresa: idEmpresa,
-            rol,
-          })
-          .eq("id", relacionEditandoId);
-
-        if (errorRelacion) {
-          throw errorRelacion;
-        }
-
-        setMensaje("Usuario actualizado correctamente");
-        setTipo("success");
-      } else {
-        setLoading(true);
-
-        /*
-         * NUEVO USUARIO:
-         * El backend crea Supabase Auth, usuarios
-         * y usuario_empresa.
+         * EDICIÓN:
+         * El backend actualiza usuarios,
+         * Supabase Auth y usuario_empresa.
          */
         const respuesta = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/auth/usuarios`,
+          `${API_URL}/api/auth/usuarios/${editandoId}`,
           {
-            method: "POST",
+            method: "PUT",
             headers: {
               "Content-Type": "application/json",
             },
@@ -271,7 +230,6 @@ export default function AbmUsuarios() {
               nombre: nombre.trim(),
               usuario: usuario.trim().toLowerCase(),
               email: email.trim().toLowerCase(),
-              password: password.trim(),
               idEmpresa,
               rol,
             }),
@@ -287,15 +245,102 @@ export default function AbmUsuarios() {
         }
 
         if (!respuesta.ok || !resultado?.ok) {
+          throw new Error(
+            resultado?.error || "No se pudo actualizar el usuario",
+          );
+        }
+
+        setMensaje("Usuario actualizado correctamente");
+        setTipo("success");
+      } else {
+        /*
+         * NUEVO USUARIO:
+         * El backend crea Supabase Auth,
+         * usuarios y usuario_empresa.
+         */
+        const nombreFinal = nombre.trim();
+        const usuarioFinal = usuario.trim().toLowerCase();
+        const emailFinal = email.trim().toLowerCase();
+        const passwordTemporal = password.trim();
+
+        const respuesta = await fetch(`${API_URL}/api/auth/usuarios`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nombre: nombreFinal,
+            usuario: usuarioFinal,
+            email: emailFinal,
+            password: passwordTemporal,
+            idEmpresa,
+            rol,
+          }),
+        });
+
+        let resultado;
+
+        try {
+          resultado = await respuesta.json();
+        } catch {
+          throw new Error("El servidor no devolvió una respuesta válida");
+        }
+
+        if (!respuesta.ok || !resultado?.ok) {
           throw new Error(resultado?.error || "No se pudo crear el usuario");
         }
 
-        setMensaje("Usuario creado correctamente");
-        setTipo("success");
+        /*
+         * Enviamos el correo con los datos de acceso.
+         * Si falla, el usuario igualmente queda creado.
+         */
+        try {
+          const respuestaEmail = await fetch(
+            `${API_URL}/api/email/bienvenida-usuario`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                to: emailFinal,
+                nombre: nombreFinal,
+                usuario: usuarioFinal,
+                passwordTemporal,
+              }),
+            },
+          );
+
+          let resultadoEmail;
+
+          try {
+            resultadoEmail = await respuestaEmail.json();
+          } catch {
+            throw new Error("El servidor no devolvió una respuesta válida");
+          }
+
+          if (!respuestaEmail.ok || !resultadoEmail?.ok) {
+            throw new Error(
+              resultadoEmail?.error ||
+                "No se pudo enviar el correo de bienvenida",
+            );
+          }
+
+          setMensaje(
+            "Usuario creado correctamente. Se enviaron los datos de acceso por email.",
+          );
+          setTipo("success");
+        } catch (errorEmail) {
+          console.error("Usuario creado, pero falló el email:", errorEmail);
+
+          setMensaje(
+            "El usuario fue creado, pero no se pudo enviar el correo. Entregue la contraseña temporal manualmente.",
+          );
+          setTipo("warning");
+        }
       }
 
       setOpen(true);
-
       limpiar();
 
       await cargarUsuariosYEmpresas();

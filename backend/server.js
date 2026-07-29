@@ -962,7 +962,682 @@ app.post("/api/email/factura", async (req, res) => {
     });
   }
 });
+app.post("/api/email/bienvenida-usuario", async (req, res) => {
+  try {
+    const { to, nombre, usuario, passwordTemporal } = req.body;
 
+    const emailDestino = String(to || "")
+      .trim()
+      .toLowerCase();
+
+    const nombreUsuario = String(nombre || "").trim();
+    const usuarioAcceso = String(usuario || "").trim();
+    const passwordAcceso = String(passwordTemporal || "").trim();
+
+    /*
+     * Validaciones
+     */
+    if (!emailDestino || !nombreUsuario || !usuarioAcceso || !passwordAcceso) {
+      return res.status(400).json({
+        ok: false,
+        error: "Faltan datos para enviar el correo de bienvenida.",
+      });
+    }
+
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailDestino);
+
+    if (!emailValido) {
+      return res.status(400).json({
+        ok: false,
+        error: "El email ingresado no es válido.",
+      });
+    }
+
+    /*
+     * Cambiá esta URL por la definitiva si fuera necesario.
+     */
+    const urlAcceso = process.env.FRONTEND_URL || "https://avancefiscal.com.ar";
+
+    /*
+     * Escapamos textos para evitar que se inserte HTML
+     * dentro del correo.
+     */
+    const escaparHtml = (texto) =>
+      String(texto)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+    const nombreSeguro = escaparHtml(nombreUsuario);
+    const usuarioSeguro = escaparHtml(usuarioAcceso);
+    const passwordSeguro = escaparHtml(passwordAcceso);
+
+    const resultado = await resend.emails.send({
+      /*
+       * Usá el mismo remitente que ya utilizás
+       * para enviar facturas.
+       */
+      from: process.env.RESEND_FROM || "Avance Fiscal <onboarding@resend.dev>",
+
+      to: [emailDestino],
+
+      subject: "Tu cuenta de Avance Fiscal fue creada",
+
+      html: `
+        <!DOCTYPE html>
+        <html lang="es">
+          <head>
+            <meta charset="UTF-8" />
+            <meta
+              name="viewport"
+              content="width=device-width, initial-scale=1.0"
+            />
+          </head>
+
+          <body
+            style="
+              margin: 0;
+              padding: 0;
+              background-color: #f4f6f8;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #263238;
+            "
+          >
+            <table
+              width="100%"
+              cellpadding="0"
+              cellspacing="0"
+              border="0"
+              style="background-color: #f4f6f8; padding: 30px 15px;"
+            >
+              <tr>
+                <td align="center">
+                  <table
+                    width="100%"
+                    cellpadding="0"
+                    cellspacing="0"
+                    border="0"
+                    style="
+                      max-width: 600px;
+                      background-color: #ffffff;
+                      border-radius: 12px;
+                      overflow: hidden;
+                      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+                    "
+                  >
+                    <tr>
+                      <td
+                        style="
+                          padding: 26px 30px;
+                          background-color: #1976d2;
+                          color: #ffffff;
+                        "
+                      >
+                        <h1
+                          style="
+                            margin: 0;
+                            font-size: 26px;
+                          "
+                        >
+                          Avance Fiscal
+                        </h1>
+
+                        <p
+                          style="
+                            margin: 7px 0 0;
+                            font-size: 14px;
+                            opacity: 0.9;
+                          "
+                        >
+                          Gestión inteligente para tu empresa
+                        </p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td style="padding: 30px;">
+                        <p
+                          style="
+                            margin-top: 0;
+                            font-size: 16px;
+                          "
+                        >
+                          Hola <strong>${nombreSeguro}</strong>:
+                        </p>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Tu cuenta de Avance Fiscal fue creada
+                          correctamente.
+                        </p>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Podés ingresar utilizando los siguientes
+                          datos:
+                        </p>
+
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          border="0"
+                          style="
+                            margin: 22px 0;
+                            background-color: #f5f7fa;
+                            border: 1px solid #e0e5ea;
+                            border-radius: 8px;
+                          "
+                        >
+                          <tr>
+                            <td
+                              style="
+                                padding: 18px 20px 8px;
+                                font-size: 14px;
+                                color: #607d8b;
+                              "
+                            >
+                              Usuario
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 0 20px 16px;
+                                font-size: 17px;
+                                font-weight: bold;
+                                color: #263238;
+                              "
+                            >
+                              ${usuarioSeguro}
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 8px 20px;
+                                font-size: 14px;
+                                color: #607d8b;
+                                border-top: 1px solid #e0e5ea;
+                              "
+                            >
+                              Contraseña temporal
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 0 20px 18px;
+                                font-size: 18px;
+                                font-weight: bold;
+                                color: #263238;
+                                letter-spacing: 1px;
+                              "
+                            >
+                              ${passwordSeguro}
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Por seguridad, al ingresar deberás cambiar
+                          esta contraseña temporal por una nueva.
+                        </p>
+
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          border="0"
+                          style="margin: 28px 0;"
+                        >
+                          <tr>
+                            <td align="center">
+                              <a
+                                href="${urlAcceso}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style="
+                                  display: inline-block;
+                                  padding: 13px 26px;
+                                  background-color: #1976d2;
+                                  color: #ffffff;
+                                  text-decoration: none;
+                                  border-radius: 7px;
+                                  font-size: 15px;
+                                  font-weight: bold;
+                                "
+                              >
+                                Ingresar a Avance Fiscal
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p
+                          style="
+                            margin-bottom: 0;
+                            font-size: 13px;
+                            line-height: 1.5;
+                            color: #78909c;
+                          "
+                        >
+                          Si no esperabas recibir este mensaje,
+                          comunicate con el administrador de tu empresa.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td
+                        style="
+                          padding: 20px 30px;
+                          background-color: #f5f7fa;
+                          text-align: center;
+                          font-size: 12px;
+                          color: #78909c;
+                        "
+                      >
+                        Avance Fiscal<br />
+                        Facturación, stock y gestión en un solo lugar.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `,
+    });
+
+    /*
+     * Resend puede devolver un error dentro del resultado
+     * sin lanzar una excepción.
+     */
+    if (resultado?.error) {
+      console.error("Error de Resend al enviar bienvenida:", resultado.error);
+
+      return res.status(500).json({
+        ok: false,
+        error:
+          resultado.error.message ||
+          "No se pudo enviar el correo de bienvenida.",
+      });
+    }
+
+    console.log(`Correo de bienvenida enviado a ${emailDestino}`);
+
+    return res.json({
+      ok: true,
+      mensaje: "Correo de bienvenida enviado correctamente.",
+      idEmail: resultado?.data?.id || null,
+    });
+  } catch (error) {
+    console.error("Error enviando correo de bienvenida:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "No se pudo enviar el correo de bienvenida.",
+    });
+  }
+});
+app.post("/api/email/bienvenida-usuario", async (req, res) => {
+  try {
+    const { to, nombre, usuario, passwordTemporal } = req.body;
+
+    const emailDestino = String(to || "")
+      .trim()
+      .toLowerCase();
+
+    const nombreUsuario = String(nombre || "").trim();
+    const usuarioAcceso = String(usuario || "").trim();
+    const passwordAcceso = String(passwordTemporal || "").trim();
+
+    /*
+     * Validaciones
+     */
+    if (!emailDestino || !nombreUsuario || !usuarioAcceso || !passwordAcceso) {
+      return res.status(400).json({
+        ok: false,
+        error: "Faltan datos para enviar el correo de bienvenida.",
+      });
+    }
+
+    const emailValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailDestino);
+
+    if (!emailValido) {
+      return res.status(400).json({
+        ok: false,
+        error: "El email ingresado no es válido.",
+      });
+    }
+
+    /*
+     * Cambiá esta URL por la definitiva si fuera necesario.
+     */
+    const urlAcceso = process.env.FRONTEND_URL || "https://avancefiscal.com.ar";
+
+    /*
+     * Escapamos textos para evitar que se inserte HTML
+     * dentro del correo.
+     */
+    const escaparHtml = (texto) =>
+      String(texto)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+
+    const nombreSeguro = escaparHtml(nombreUsuario);
+    const usuarioSeguro = escaparHtml(usuarioAcceso);
+    const passwordSeguro = escaparHtml(passwordAcceso);
+
+    const resultado = await resend.emails.send({
+      /*
+       * Usá el mismo remitente que ya utilizás
+       * para enviar facturas.
+       */
+      from: process.env.RESEND_FROM || "Avance Fiscal <onboarding@resend.dev>",
+
+      to: [emailDestino],
+
+      subject: "Tu cuenta de Avance Fiscal fue creada",
+
+      html: `
+        <!DOCTYPE html>
+        <html lang="es">
+          <head>
+            <meta charset="UTF-8" />
+            <meta
+              name="viewport"
+              content="width=device-width, initial-scale=1.0"
+            />
+          </head>
+
+          <body
+            style="
+              margin: 0;
+              padding: 0;
+              background-color: #f4f6f8;
+              font-family: Arial, Helvetica, sans-serif;
+              color: #263238;
+            "
+          >
+            <table
+              width="100%"
+              cellpadding="0"
+              cellspacing="0"
+              border="0"
+              style="background-color: #f4f6f8; padding: 30px 15px;"
+            >
+              <tr>
+                <td align="center">
+                  <table
+                    width="100%"
+                    cellpadding="0"
+                    cellspacing="0"
+                    border="0"
+                    style="
+                      max-width: 600px;
+                      background-color: #ffffff;
+                      border-radius: 12px;
+                      overflow: hidden;
+                      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+                    "
+                  >
+                    <tr>
+                      <td
+                        style="
+                          padding: 26px 30px;
+                          background-color: #1976d2;
+                          color: #ffffff;
+                        "
+                      >
+                        <h1
+                          style="
+                            margin: 0;
+                            font-size: 26px;
+                          "
+                        >
+                          Avance Fiscal
+                        </h1>
+
+                        <p
+                          style="
+                            margin: 7px 0 0;
+                            font-size: 14px;
+                            opacity: 0.9;
+                          "
+                        >
+                          Gestión inteligente para tu empresa
+                        </p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td style="padding: 30px;">
+                        <p
+                          style="
+                            margin-top: 0;
+                            font-size: 16px;
+                          "
+                        >
+                          Hola <strong>${nombreSeguro}</strong>:
+                        </p>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Tu cuenta de Avance Fiscal fue creada
+                          correctamente.
+                        </p>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Podés ingresar utilizando los siguientes
+                          datos:
+                        </p>
+
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          border="0"
+                          style="
+                            margin: 22px 0;
+                            background-color: #f5f7fa;
+                            border: 1px solid #e0e5ea;
+                            border-radius: 8px;
+                          "
+                        >
+                          <tr>
+                            <td
+                              style="
+                                padding: 18px 20px 8px;
+                                font-size: 14px;
+                                color: #607d8b;
+                              "
+                            >
+                              Usuario
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 0 20px 16px;
+                                font-size: 17px;
+                                font-weight: bold;
+                                color: #263238;
+                              "
+                            >
+                              ${usuarioSeguro}
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 8px 20px;
+                                font-size: 14px;
+                                color: #607d8b;
+                                border-top: 1px solid #e0e5ea;
+                              "
+                            >
+                              Contraseña temporal
+                            </td>
+                          </tr>
+
+                          <tr>
+                            <td
+                              style="
+                                padding: 0 20px 18px;
+                                font-size: 18px;
+                                font-weight: bold;
+                                color: #263238;
+                                letter-spacing: 1px;
+                              "
+                            >
+                              ${passwordSeguro}
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p
+                          style="
+                            font-size: 15px;
+                            line-height: 1.6;
+                          "
+                        >
+                          Por seguridad, al ingresar deberás cambiar
+                          esta contraseña temporal por una nueva.
+                        </p>
+
+                        <table
+                          width="100%"
+                          cellpadding="0"
+                          cellspacing="0"
+                          border="0"
+                          style="margin: 28px 0;"
+                        >
+                          <tr>
+                            <td align="center">
+                              <a
+                                href="${urlAcceso}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style="
+                                  display: inline-block;
+                                  padding: 13px 26px;
+                                  background-color: #1976d2;
+                                  color: #ffffff;
+                                  text-decoration: none;
+                                  border-radius: 7px;
+                                  font-size: 15px;
+                                  font-weight: bold;
+                                "
+                              >
+                                Ingresar a Avance Fiscal
+                              </a>
+                            </td>
+                          </tr>
+                        </table>
+
+                        <p
+                          style="
+                            margin-bottom: 0;
+                            font-size: 13px;
+                            line-height: 1.5;
+                            color: #78909c;
+                          "
+                        >
+                          Si no esperabas recibir este mensaje,
+                          comunicate con el administrador de tu empresa.
+                        </p>
+                      </td>
+                    </tr>
+
+                    <tr>
+                      <td
+                        style="
+                          padding: 20px 30px;
+                          background-color: #f5f7fa;
+                          text-align: center;
+                          font-size: 12px;
+                          color: #78909c;
+                        "
+                      >
+                        Avance Fiscal<br />
+                        Facturación, stock y gestión en un solo lugar.
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </body>
+        </html>
+      `,
+    });
+
+    /*
+     * Resend puede devolver un error dentro del resultado
+     * sin lanzar una excepción.
+     */
+    if (resultado?.error) {
+      console.error("Error de Resend al enviar bienvenida:", resultado.error);
+
+      return res.status(500).json({
+        ok: false,
+        error:
+          resultado.error.message ||
+          "No se pudo enviar el correo de bienvenida.",
+      });
+    }
+
+    console.log(`Correo de bienvenida enviado a ${emailDestino}`);
+
+    return res.json({
+      ok: true,
+      mensaje: "Correo de bienvenida enviado correctamente.",
+      idEmail: resultado?.data?.id || null,
+    });
+  } catch (error) {
+    console.error("Error enviando correo de bienvenida:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "No se pudo enviar el correo de bienvenida.",
+    });
+  }
+});
 const PORT = Number(process.env.PORT) || 3001;
 
 app.listen(PORT, "0.0.0.0", () => {
