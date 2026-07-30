@@ -295,6 +295,8 @@ export default function AbmUsuarios() {
          * Si falla, el usuario igualmente queda creado.
          */
         try {
+          console.log("=== ENVIANDO EMAIL DE BIENVENIDA ===");
+
           const respuestaEmail = await fetch(
             `${API_URL}/api/email/bienvenida-usuario`,
             {
@@ -319,6 +321,8 @@ export default function AbmUsuarios() {
             throw new Error("El servidor no devolvió una respuesta válida");
           }
 
+          console.log("Respuesta email:", resultadoEmail);
+
           if (!respuestaEmail.ok || !resultadoEmail?.ok) {
             throw new Error(
               resultadoEmail?.error ||
@@ -334,7 +338,7 @@ export default function AbmUsuarios() {
           console.error("Usuario creado, pero falló el email:", errorEmail);
 
           setMensaje(
-            "El usuario fue creado, pero no se pudo enviar el correo. Entregue la contraseña temporal manualmente.",
+            "El usuario fue creado, pero no se pudo enviar el correo de bienvenida.",
           );
           setTipo("warning");
         }
