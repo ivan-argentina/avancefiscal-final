@@ -84,6 +84,8 @@ const obtenerConfiguracionEmpresa = async (cuitEmpresa) => {
   /*
    * Descargar certificado.
    */
+ 
+
   const { data: certFile, error: certError } = await supabase.storage
     .from("afip-certificados")
     .download(empresa.certificado_crt);
