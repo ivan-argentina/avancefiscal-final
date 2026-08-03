@@ -1,4 +1,4 @@
-# Logs
+ Logs
 logs
 *.log
 npm-debug.log*
@@ -14,6 +14,7 @@ node_modules
 dist
 dist-ssr
 .env
+.env.development
 *.local
 backend/ta-wsfe.json
 backend/certificados/**/*.key
@@ -30,3 +31,5 @@ backend/certificados/**/*.csr
 *.njsproj
 *.sln
 *.sw?
+# Supabase
+supabase/.temp/

@@ -39,6 +39,8 @@ export default function AbmEmpresas() {
   const [activo, setActivo] = useState(true);
   const [archivoCertificado, setArchivoCertificado] = useState(null);
   const [archivoKey, setArchivoKey] = useState(null);
+  const [archivoLogo, setArchivoLogo] = useState(null);
+  const [logoUrl, setLogoUrl] = useState("");
   const [certificadoVencimiento, setCertificadoVencimiento] = useState("");
   const [certificadoCrt, setCertificadoCrt] = useState("");
   const [certificadoKey, setCertificadoKey] = useState("");
@@ -136,9 +138,10 @@ export default function AbmEmpresas() {
     setCertificadoVencimiento("");
     setCertificadoCrt("");
     setCertificadoKey("");
-
     setIngresosBrutos("");
     setInicioActividades("");
+    setArchivoLogo(null);
+    setLogoUrl("");
     setErrorCuit("");
   };
   const guardarEmpresa = async () => {
@@ -185,6 +188,36 @@ export default function AbmEmpresas() {
 
       let rutaCertificado = null;
       let rutaKey = null;
+      let nuevaLogoUrl = logoUrl || null;
+      /*
+       * SUBIR LOGO
+       */
+      if (archivoLogo) {
+        const extension = archivoLogo.name.split(".").pop()?.toLowerCase();
+
+        if (!["jpg", "jpeg", "png", "webp"].includes(extension)) {
+          throw new Error("El logo debe ser JPG, PNG o WEBP");
+        }
+
+        const rutaLogo = `${cuitLimpio}/logo.${extension}`;
+
+        const { error: errorLogo } = await supabase.storage
+          .from("logos")
+          .upload(rutaLogo, archivoLogo, {
+            upsert: true,
+            contentType: archivoLogo.type,
+          });
+
+        if (errorLogo) {
+          throw errorLogo;
+        }
+
+        const { data: logoPublico } = supabase.storage
+          .from("logos")
+          .getPublicUrl(rutaLogo);
+
+        nuevaLogoUrl = logoPublico.publicUrl;
+      }
 
       /*
        * SUBIR CERTIFICADO
@@ -230,6 +263,7 @@ export default function AbmEmpresas() {
         telefono: String(telefono || "").trim(),
         email: String(email || "").trim(),
         direccion: String(direccion || "").trim(),
+        logo_url: nuevaLogoUrl,
         punto_venta: Number(puntoVenta),
         ambiente_fiscal: ambienteFiscal,
         idciudad: Number(idCiudad),
@@ -323,6 +357,8 @@ export default function AbmEmpresas() {
 
     setArchivoCertificado(null);
     setArchivoKey(null);
+    setArchivoLogo(null);
+    setLogoUrl(empresa.logo_url || "");
 
     setCertificadoVencimiento(
       empresa.certificado_vencimiento
@@ -615,6 +651,56 @@ export default function AbmEmpresas() {
               <MenuItem value="true">Activa</MenuItem>
               <MenuItem value="false">Inactiva</MenuItem>
             </TextField>
+          </Grid>
+          <Grid size={{ xs: 12 }}>
+            <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 1 }}>
+              Logo de la empresa
+            </Typography>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 4 }}>
+            <Button
+              component="label"
+              variant="outlined"
+              fullWidth
+              size="small"
+              sx={{ height: 40 }}
+            >
+              {archivoLogo ? archivoLogo.name : "Subir logo"}
+              <input
+                hidden
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                onChange={(e) => {
+                  const archivo = e.target.files?.[0] || null;
+                  setArchivoLogo(archivo);
+
+                  if (archivo) {
+                    setLogoUrl(URL.createObjectURL(archivo));
+                  }
+                }}
+              />
+            </Button>
+          </Grid>
+
+          <Grid size={{ xs: 12, md: 4 }}>
+            {logoUrl && (
+              <Box
+                component="img"
+                src={logoUrl}
+                alt="Vista previa del logo"
+                sx={{
+                  width: 160,
+                  height: 90,
+                  objectFit: "contain",
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 2,
+                  p: 1,
+                  backgroundColor: "background.paper",
+                }}
+              />
+            )}
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 1 }}>
