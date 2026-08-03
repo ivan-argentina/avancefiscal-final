@@ -883,10 +883,6 @@ app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
       (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    const diasRestantes = Math.ceil(
-      (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
-    );
-
     let estado = "vigente";
 
     if (diasRestantes <= 0) {
