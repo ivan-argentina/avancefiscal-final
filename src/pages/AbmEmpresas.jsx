@@ -348,7 +348,11 @@ export default function AbmEmpresas() {
     setTelefono(empresa.telefono || "");
     setEmail(empresa.email || "");
     setDireccion(empresa.direccion || "");
-    setIdCiudad(empresa.idciudad ?? "");
+    setIdCiudad(
+      empresa.idciudad !== null && empresa.idciudad !== undefined
+        ? String(empresa.idciudad)
+        : "",
+    );
     setCondicionIva(empresa.condicion_iva || "");
     setCategoriaMonotributo(empresa.categoria_monotributo || "");
     setPuntoVenta(empresa.punto_venta || "");
@@ -552,7 +556,7 @@ export default function AbmEmpresas() {
               <MenuItem value="">Seleccione una ciudad</MenuItem>
 
               {ciudades.map((ciudad) => (
-                <MenuItem key={ciudad.id} value={ciudad.id}>
+                <MenuItem key={ciudad.id} value={String(ciudad.id)}>
                   {ciudad.nombre}
                 </MenuItem>
               ))}
