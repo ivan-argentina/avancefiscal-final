@@ -707,18 +707,6 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       }
     }
 
-    console.log("Datos para AFIP:", {
-      cuitEmpresa,
-      puntoVenta,
-      total,
-      docTipo,
-      docNro,
-      tipoComprobante: fiscal.comprobante.tipo_comprobante,
-    });
-    //console.log("CONDICION IVA:", fiscal.empresa.condicionIva);
-    //console.log("LETRA:", fiscal.comprobante.letra);
-    //console.log("TIPO:", fiscal.comprobante.tipo_comprobante);
-
     const resultadoAfip = await autorizarFactura({
       cuit: cuitEmpresa,
       puntoVenta,
@@ -890,6 +878,10 @@ app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
 
     const vence = cert.validity.notAfter;
     const hoy = new Date();
+
+    const diasRestantes = Math.ceil(
+      (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),
+    );
 
     const diasRestantes = Math.ceil(
       (vence.getTime() - hoy.getTime()) / (1000 * 60 * 60 * 24),

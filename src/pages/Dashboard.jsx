@@ -325,6 +325,7 @@ export default function Dashboard() {
 
   const cargarEstadoCertificado = async () => {
     if (!empresa?.id) {
+      setCertificado(null);
       return;
     }
     try {
@@ -366,7 +367,6 @@ export default function Dashboard() {
         if (error) {
           throw error;
         }
-
         cuitEmpresa = relacion?.empresas?.cuit || null;
       }
 
@@ -398,13 +398,17 @@ export default function Dashboard() {
       setCertificado(null);
     }
   };
-
   useEffect(() => {
     cargarEmpresa();
+  }, []);
+
+  useEffect(() => {
+    if (!empresa?.id) return;
+
     cargarEstadoCertificado();
     cargarResumen();
     cargarMonotributo();
-  }, []);
+  }, [empresa?.id, empresa?.cuit]);
 
   const configCertificado = {
     vigente: {
