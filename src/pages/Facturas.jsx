@@ -31,6 +31,8 @@ import {
   TableHead,
   TableRow,
   TextField,
+  Snackbar,
+  Alert,
 } from "@mui/material";
 
 export default function Facturas() {
@@ -50,6 +52,15 @@ export default function Facturas() {
   const facturaPdfRef = useRef();
 
   const navigate = useNavigate();
+  const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState("info");
+  const [openMensaje, setOpenMensaje] = useState(false);
+
+  const mostrarNotificacion = (texto, tipo = "info") => {
+    setMensaje(texto);
+    setTipoMensaje(tipo);
+    setOpenMensaje(true);
+  };
   const crearNotaCredito = (factura) => {
     localStorage.setItem("notaCreditoOrigen", JSON.stringify(factura));
 
@@ -72,41 +83,47 @@ export default function Facturas() {
   };
 
   const autorizarFacturaPendiente = async (factura) => {
-    const response = await fetch(`${API_URL}/api/fiscal/autorizar`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        idFactura: factura.id,
-      }),
-    });
+    try {
+      const response = await fetch(`${API_URL}/api/fiscal/autorizar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idFactura: factura.id,
+        }),
+      });
 
-    const data = await response.json();
-    const detallePdf = data.fiscal.detalle.map((item, index) => ({
-      id: index,
-      articulo: item.descripcion,
-      descripcion: item.descripcion,
-      cantidad: item.cantidad,
-      precio: item.precio,
-      subtotal: item.subtotal,
-    }));
+      const data = await response.json();
 
-    if (!data.ok) {
+      if (!response.ok || !data.ok) {
+        mostrarNotificacion(
+          data?.mensaje || data?.error || "Error al autorizar la factura",
+          "error",
+        );
+        return;
+      }
+
+      mostrarNotificacion("Factura autorizada correctamente", "success");
+
+      await cargarFacturas();
+    } catch (error) {
+      console.error("Error al autorizar factura:", error);
+
       mostrarNotificacion(
-        data.mensaje || data.error || "Error al autorizar la factura",
+        error?.message || "No se pudo autorizar la factura",
         "error",
       );
-      return;
     }
-
-    mostrarNotificacion("Factura autorizada correctamente", "success");
-
-    await cargarFacturas();
   };
 
   const enviarWhatsAppFactura = async (factura) => {
+    console.log("Entró a enviarWhatsAppFactura");
+    console.log(factura);
+
     let telefono = String(factura.clientes?.telefono || "").replace(/\D/g, "");
+
+    console.log("Teléfono original:", factura.clientes?.telefono);
 
     if (!telefono) {
       mostrarNotificacion("El cliente no tiene teléfono cargado", "warning");
@@ -128,6 +145,8 @@ export default function Facturas() {
     }
 
     const numeroWhatsApp = `54${telefono}`;
+
+    console.log("Número WhatsApp armado:", numeroWhatsApp);
 
     const mensaje =
       `Hola ${factura.clientes?.nombre || ""}, ` +
@@ -690,13 +709,15 @@ export default function Facturas() {
           setTimeout(resolve, 300);
         });
 
-        const pdfGenerado = await generarArchivoPdf(
-          facturaPdfRef.current,
-          pdfNombre,
-        );
+        const pdfGenerado = await generarpdfU(facturaPdfRef.current, pdfNombre);
 
         if (pdfModo === "whatsapp") {
-          abrirWhatsAppPendiente(pdfGenerado);
+          if (whatsAppPendiente?.ventana && whatsAppPendiente?.url) {
+            whatsAppPendiente.ventana.location.href = whatsAppPendiente.url;
+            setWhatsAppPendiente(null);
+          } else {
+            mostrarNotificacion("No se pudo abrir WhatsApp", "warning");
+          }
         }
 
         if (pdfModo === "email") {
@@ -1096,4 +1117,19 @@ export default function Facturas() {
       )}
     </Box>
   );
+  <Snackbar
+    open={openMensaje}
+    autoHideDuration={5000}
+    onClose={() => setOpenMensaje(false)}
+    anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+  >
+    <Alert
+      severity={tipoMensaje}
+      onClose={() => setOpenMensaje(false)}
+      variant="filled"
+      sx={{ width: "100%" }}
+    >
+      {mensaje}
+    </Alert>
+  </Snackbar>;
 }
