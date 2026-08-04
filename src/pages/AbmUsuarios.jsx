@@ -295,8 +295,6 @@ export default function AbmUsuarios() {
          * Si falla, el usuario igualmente queda creado.
          */
         try {
-          console.log("=== ENVIANDO EMAIL DE BIENVENIDA ===");
-
           const respuestaEmail = await fetch(
             `${API_URL}/api/email/bienvenida-usuario`,
             {
@@ -320,8 +318,6 @@ export default function AbmUsuarios() {
           } catch {
             throw new Error("El servidor no devolvió una respuesta válida");
           }
-
-          console.log("Respuesta email:", resultadoEmail);
 
           if (!respuestaEmail.ok || !resultadoEmail?.ok) {
             throw new Error(

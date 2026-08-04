@@ -950,6 +950,7 @@ app.post("/api/email/factura", async (req, res) => {
     });
   }
 });
+
 app.post("/api/email/bienvenida-usuario", async (req, res) => {
   try {
     const { to, nombre, usuario, passwordTemporal } = req.body;

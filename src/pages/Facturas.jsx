@@ -69,6 +69,9 @@ export default function Facturas() {
   const API_URL = import.meta.env.VITE_API_URL;
 
   const enviarFacturaEmail = async (factura) => {
+    console.log("Entró a enviarFacturaEmail");
+    console.log("Factura email:", factura);
+    console.log("Email cliente:", factura.clientes?.email);
     if (enviandoEmail) return;
 
     const emailCliente = factura.clientes?.email;
@@ -79,6 +82,7 @@ export default function Facturas() {
     }
 
     setEnviandoEmail(true);
+    console.log("Llamando descargarPdfFactura en modo email");
     await descargarPdfFactura(factura, "email");
   };
 
@@ -118,12 +122,7 @@ export default function Facturas() {
   };
 
   const enviarWhatsAppFactura = async (factura) => {
-    console.log("Entró a enviarWhatsAppFactura");
-    console.log(factura);
-
     let telefono = String(factura.clientes?.telefono || "").replace(/\D/g, "");
-
-    console.log("Teléfono original:", factura.clientes?.telefono);
 
     if (!telefono) {
       mostrarNotificacion("El cliente no tiene teléfono cargado", "warning");
@@ -145,8 +144,6 @@ export default function Facturas() {
     }
 
     const numeroWhatsApp = `54${telefono}`;
-
-    console.log("Número WhatsApp armado:", numeroWhatsApp);
 
     const mensaje =
       `Hola ${factura.clientes?.nombre || ""}, ` +
@@ -308,6 +305,8 @@ export default function Facturas() {
   };
 
   const descargarPdfFactura = async (factura, modo = "descargar") => {
+    console.log("Entró a descargarPdfFactura");
+    console.log("Modo recibido:", modo);
     try {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
@@ -593,6 +592,7 @@ export default function Facturas() {
           8,
           "0",
         )}.pdf`;
+      setPdfNombre(nombrePdf);
 
       /*
        * ENVÍO POR EMAIL
@@ -641,7 +641,6 @@ export default function Facturas() {
 
         setPdfModo("email");
       } else {
-        setPdfNombre(nombrePdf);
         setPdfModo(modo || "descargar");
       }
     } catch (error) {
@@ -704,12 +703,17 @@ export default function Facturas() {
     }
 
     const procesarPdf = async () => {
+      console.log("Entró a procesarPdf");
+      console.log("pdfModo actual:", pdfModo);
+      console.log("pdfData:", pdfData);
       try {
         await new Promise((resolve) => {
           setTimeout(resolve, 300);
         });
 
         const pdfGenerado = await generarpdfU(facturaPdfRef.current, pdfNombre);
+        console.log("PDF generado:", pdfGenerado);
+        console.log("Tipo PDF:", pdfGenerado?.constructor?.name);
 
         if (pdfModo === "whatsapp") {
           if (whatsAppPendiente?.ventana && whatsAppPendiente?.url) {
@@ -721,7 +725,41 @@ export default function Facturas() {
         }
 
         if (pdfModo === "email") {
-          // Después conectaremos aquí el envío por email.
+          if (!emailPendiente?.to) {
+            throw new Error("No se encontró el email del destinatario");
+          }
+
+          const response = await fetch(`${API_URL}/api/email/factura`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              to: emailPendiente.to,
+              subject: emailPendiente.subject,
+              html: emailPendiente.html,
+              filename: pdfGenerado.filename || emailPendiente.filename,
+              pdfBase64: pdfGenerado.pdfBase64,
+            }),
+          });
+
+          const resultado = await response.json();
+
+          if (!response.ok || !resultado.ok) {
+            throw new Error(
+              resultado?.error ||
+                resultado?.mensaje ||
+                "No se pudo enviar el email",
+            );
+          }
+
+          mostrarNotificacion(
+            "Factura enviada por email correctamente",
+            "success",
+          );
+
+          setEmailPendiente(null);
+          setEnviandoEmail(false);
         }
       } catch (error) {
         console.error("Error al procesar el PDF:", error);

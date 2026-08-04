@@ -88,7 +88,7 @@ export default function Factura() {
         const idEmpresa = await obtenerEmpresa(usuario.id);
 
         if (!idEmpresa) {
-          console.log("No hay una empresa activa seleccionada");
+          console.error("No hay una empresa activa seleccionada");
           setEmpresa(null);
           return;
         }
@@ -109,14 +109,14 @@ export default function Factura() {
         }
 
         if (!data) {
-          console.log("No se encontró la empresa activa");
+          console.error("No se encontró la empresa activa");
           setEmpresa(null);
           return;
         }
 
         setEmpresa(data);
       } catch (error) {
-        console.log("Error cargando empresa en factura:", error);
+        console.error("Error cargando empresa en factura:", error);
         setEmpresa(null);
       }
     };
@@ -137,7 +137,7 @@ export default function Factura() {
         }
 
         if (!facturaPdfRef.current) {
-          console.log("Todavía no está listo el PDF");
+          console.error("Todavía no está listo el PDF");
           return;
         }
 
@@ -266,7 +266,7 @@ export default function Factura() {
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       return;
     }
 
@@ -294,7 +294,7 @@ export default function Factura() {
       .order("nombre");
 
     if (error) {
-      console.log("Error al cargar clientes:", error);
+      console.error("Error al cargar clientes:", error);
       return;
     }
 
@@ -312,7 +312,7 @@ export default function Factura() {
       .order("descripcion", { ascending: true });
 
     if (error) {
-      console.log("Error al cargar artículos:", error);
+      console.error("Error al cargar artículos:", error);
       return;
     }
 
@@ -533,7 +533,7 @@ export default function Factura() {
         .single();
 
       if (errorEmpresa) {
-        console.log("Error cargando empresa completa:", errorEmpresa);
+        console.error("Error cargando empresa completa:", errorEmpresa);
       }
       const datosPdfFiscal = {
         empresa: {
@@ -596,7 +596,6 @@ export default function Factura() {
         });
 
         if (errorStock) {
-          console.log("Error al mover stock:", errorStock);
           mostrarNotificacion("Error al actualizar el stock", "error");
           return;
         }

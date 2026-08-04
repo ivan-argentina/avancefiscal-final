@@ -83,7 +83,7 @@ export default function InicioFactu() {
         .maybeSingle();
 
       if (error) {
-        console.log("error Empresa", error);
+        console.error("error Empresa", error);
       }
 
       setEmpresaNombre(data?.razon_social || "");

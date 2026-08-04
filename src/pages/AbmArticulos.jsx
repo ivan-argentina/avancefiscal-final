@@ -439,7 +439,7 @@ export default function AbmArticulos() {
       setArchivoImagen(archivoComprimido);
       setPreviewUrl(URL.createObjectURL(archivoComprimido));
     } catch (err) {
-      console.log(err);
+      console.error(err);
       mostrarNotificacion("Error al procesar la imagen", "error");
     }
   };
@@ -461,7 +461,7 @@ export default function AbmArticulos() {
       });
 
     if (error) {
-      console.log("ERROR STORAGE:", error);
+      console.error("ERROR STORAGE:", error);
       mostrarNotificacion(`Error al subir imagen: ${error.message}`, "error");
       return null;
     }
@@ -475,7 +475,7 @@ export default function AbmArticulos() {
     const { error } = await supabase.storage.from("articulos").remove([path]);
 
     if (error) {
-      console.log("No se pudo borrar la imagen anterior:", error.message);
+      console.error("No se pudo borrar la imagen anterior:", error.message);
     }
   };
 
@@ -506,14 +506,14 @@ export default function AbmArticulos() {
     ]);
 
     if (familiasResp.error) {
-      console.log(familiasResp.error);
+      console.error(familiasResp.error);
       mostrarNotificacion("Error al cargar familias", "error");
     } else {
       setFamilias(familiasResp.data || []);
     }
 
     if (articulosResp.error) {
-      console.log(articulosResp.error);
+      console.error(articulosResp.error);
       mostrarNotificacion("Error al cargar artículos", "error");
     } else {
       setArticulos(articulosResp.data || []);
@@ -524,7 +524,7 @@ export default function AbmArticulos() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       setArticulos([]);
       return;
     }
@@ -532,7 +532,7 @@ export default function AbmArticulos() {
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       setArticulos([]);
       return;
     }
@@ -629,14 +629,14 @@ export default function AbmArticulos() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       return;
     }
 
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       return;
     }
 
@@ -660,7 +660,7 @@ export default function AbmArticulos() {
         .eq("idempresa", idEmpresa);
 
       if (error) {
-        console.log(error);
+        console.error(error);
         mostrarNotificacion("Error al actualizar artículo", "error");
         return;
       }
@@ -676,7 +676,7 @@ export default function AbmArticulos() {
         .insert([articuloPayload]);
 
       if (error) {
-        console.log(error);
+        console.error(error);
         mostrarNotificacion("Error al guardar el artículo", "error");
         return;
       }
@@ -882,7 +882,7 @@ export default function AbmArticulos() {
       const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
       if (!idEmpresa) {
-        console.log("No encontró empresa");
+        console.error("No encontró empresa");
         return;
       }
 

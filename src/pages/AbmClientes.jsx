@@ -100,7 +100,7 @@ export default function AbmClientes() {
       .eq("idempresa", idEmpresa)
       .order("nombre");
     if (error) {
-      console.log(error);
+      console.error(error);
       return [];
     }
     return data || [];
@@ -109,13 +109,13 @@ export default function AbmClientes() {
   const cargarClientes = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       setClientes([]);
       return;
     }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       setClientes([]);
       return;
     }
@@ -141,7 +141,7 @@ export default function AbmClientes() {
       .order("nombre");
 
     if (error) {
-      console.log(error);
+      console.error(error);
       return [];
     }
 
@@ -181,13 +181,13 @@ export default function AbmClientes() {
   const eliminarClientes = async (id) => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       setClientes([]);
       return;
     }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       setClientes([]);
       return;
     }
@@ -257,13 +257,13 @@ export default function AbmClientes() {
     e.preventDefault();
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       setClientes([]);
       return;
     }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
+      console.error("No hay una empresa activa seleccionada");
       setClientes([]);
       return;
     }

@@ -108,7 +108,7 @@ export default function AbmEmpresas() {
       .order("razon_social", { ascending: true });
 
     if (error) {
-      console.log("Error al cargar empresas:", error);
+      console.error("Error al cargar empresas:", error);
       return;
     }
 

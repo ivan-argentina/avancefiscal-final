@@ -325,7 +325,7 @@ export default function ResumenProveedores() {
       .order("fecha", { ascending: true });
 
     if (error) {
-      console.log("Error al cargar facturas pendientes:", error);
+      console.error("Error al cargar facturas pendientes:", error);
       setComprasPendientes([]);
       return;
     }

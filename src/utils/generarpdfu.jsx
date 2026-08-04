@@ -7,7 +7,7 @@ export const generarpdfU = async (
   opciones = {},
 ) => {
   if (!elemento) {
-    console.log("No hay elemento para generar PDF");
+    console.error("No hay elemento para generar PDF");
     return null;
   }
 
@@ -18,7 +18,7 @@ export const generarpdfU = async (
   });
 
   if (!canvas.width || !canvas.height) {
-    console.log("El elemento no tiene tamaño válido para PDF");
+    console.error("El elemento no tiene tamaño válido para PDF");
     return null;
   }
 

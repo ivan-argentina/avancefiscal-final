@@ -52,7 +52,7 @@ export default function Dashboard() {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
     if (!usuarioGuardado?.id) {
-      console.log("No se encontró el usuario logueado");
+      (console, error("No se encontró el usuario logueado"));
       setEmpresa(null);
       setIdEmpresa(null);
       return;
@@ -61,7 +61,6 @@ export default function Dashboard() {
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     if (!idEmpresa) {
-      console.log("No hay una empresa activa seleccionada");
       setEmpresa(null);
       setIdEmpresa(null);
       return;
@@ -76,13 +75,12 @@ export default function Dashboard() {
       .maybeSingle();
 
     if (error) {
-      console.log("Error cargando empresa:", error);
+      console.error("Error cargando empresa:", error);
       setEmpresa(null);
       return;
     }
 
     if (!data) {
-      console.log("No se encontró la empresa activa");
       setEmpresa(null);
       return;
     }
@@ -99,7 +97,7 @@ export default function Dashboard() {
       usuarioGuardado?.idempresa ||
       usuarioGuardado?.empresa?.id;
     if (!idEmpresa || idEmpresa === "null" || idEmpresa === "undefined") {
-      console.log("Dashboard: no hay empresa válida seleccionada");
+      console.warn("Dashboard: no hay empresa válida seleccionada");
       return;
     }
 
@@ -151,7 +149,7 @@ export default function Dashboard() {
       .lte("fecha", hasta);
 
     if (error) {
-      console.log("Error resumen:", error);
+      console.error("Error resumen:", error);
       return;
     }
 
@@ -197,14 +195,14 @@ export default function Dashboard() {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
       if (!usuarioGuardado?.id) {
-        console.log("No hay usuario logueado");
+        console.error("No hay usuario logueado");
         return;
       }
 
       const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
       if (!idEmpresa) {
-        console.log("No se encontró la empresa");
+        console.error("No se encontró la empresa");
         return;
       }
 
@@ -218,7 +216,7 @@ export default function Dashboard() {
         .maybeSingle();
 
       if (errorEmpresa) {
-        console.log("Error empresa monotributo:", errorEmpresa);
+        console.error("Error empresa monotributo:", errorEmpresa);
         return;
       }
 
@@ -232,7 +230,7 @@ export default function Dashboard() {
         .toUpperCase();
 
       if (!categoriaEmpresa) {
-        console.log("La empresa no tiene categoría de monotributo cargada");
+        console.error("La empresa no tiene categoría de monotributo cargada");
         setMonotributo(null);
         return;
       }
@@ -250,12 +248,12 @@ export default function Dashboard() {
         .maybeSingle();
 
       if (errorCategoria) {
-        console.log("Error categoría monotributo:", errorCategoria);
+        console.error("Error categoría monotributo:", errorCategoria);
         return;
       }
 
       if (!categoria) {
-        console.log(
+        console.error(
           `No se encontró la categoría ${categoriaEmpresa} en categorias_monotributo`,
         );
         setMonotributo(null);
@@ -265,7 +263,7 @@ export default function Dashboard() {
       const limite = Number(categoria.limite_facturacion || 0);
 
       if (limite <= 0) {
-        console.log("El límite de facturación no es válido:", categoria);
+        console.error("El límite de facturación no es válido:", categoria);
         setMonotributo(null);
         return;
       }
@@ -292,7 +290,7 @@ export default function Dashboard() {
         .lte("fecha", hasta);
 
       if (errorFacturas) {
-        console.log("Error facturas monotributo:", errorFacturas);
+        console.error("Error facturas monotributo:", errorFacturas);
         return;
       }
 
@@ -394,7 +392,7 @@ export default function Dashboard() {
         setCertificado(null);
       }
     } catch (error) {
-      console.log("Error certificado:", error);
+      console.error("Error certificado:", error);
       setCertificado(null);
     }
   };
