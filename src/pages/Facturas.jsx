@@ -72,6 +72,8 @@ export default function Facturas() {
     console.log("Entró a enviarFacturaEmail");
     console.log("Factura email:", factura);
     console.log("Email cliente:", factura.clientes?.email);
+    console.log("API_URL:", API_URL);
+
     if (enviandoEmail) return;
 
     const emailCliente = factura.clientes?.email;
@@ -81,9 +83,22 @@ export default function Facturas() {
       return;
     }
 
-    setEnviandoEmail(true);
-    console.log("Llamando descargarPdfFactura en modo email");
-    await descargarPdfFactura(factura, "email");
+    try {
+      setEnviandoEmail(true);
+
+      console.log("Llamando descargarPdfFactura en modo email");
+
+      await descargarPdfFactura(factura, "email");
+    } catch (error) {
+      console.error("Error al preparar el envío por email:", error);
+
+      mostrarNotificacion(
+        error.message || "No se pudo enviar la factura por email",
+        "error",
+      );
+    } finally {
+      setEnviandoEmail(false);
+    }
   };
 
   const autorizarFacturaPendiente = async (factura) => {
@@ -706,50 +721,91 @@ export default function Facturas() {
       console.log("Entró a procesarPdf");
       console.log("pdfModo actual:", pdfModo);
       console.log("pdfData:", pdfData);
+
       try {
         await new Promise((resolve) => {
           setTimeout(resolve, 300);
         });
 
         const pdfGenerado = await generarpdfU(facturaPdfRef.current, pdfNombre);
+
         console.log("PDF generado:", pdfGenerado);
         console.log("Tipo PDF:", pdfGenerado?.constructor?.name);
 
+        if (!pdfGenerado?.pdfBase64) {
+          throw new Error("El PDF fue generado sin contenido Base64");
+        }
+
+        /*
+         * WHATSAPP
+         */
         if (pdfModo === "whatsapp") {
           if (whatsAppPendiente?.ventana && whatsAppPendiente?.url) {
             whatsAppPendiente.ventana.location.href = whatsAppPendiente.url;
+
             setWhatsAppPendiente(null);
           } else {
-            mostrarNotificacion("No se pudo abrir WhatsApp", "warning");
+            throw new Error("No se pudo abrir WhatsApp");
           }
         }
 
+        /*
+         * EMAIL
+         */
         if (pdfModo === "email") {
           if (!emailPendiente?.to) {
             throw new Error("No se encontró el email del destinatario");
           }
+
+          console.log("Entró al bloque de envío por email");
+          console.log("Email pendiente:", emailPendiente);
+          console.log("Endpoint email:", `${API_URL}/api/email/factura`);
+
+          const payload = {
+            to: emailPendiente.to,
+            subject: emailPendiente.subject,
+            html: emailPendiente.html,
+            filename:
+              pdfGenerado.filename || emailPendiente.filename || pdfNombre,
+            pdfBase64: pdfGenerado.pdfBase64,
+          };
+
+          console.log("Datos enviados:", {
+            ...payload,
+            pdfBase64: `Base64 recibido (${payload.pdfBase64?.length || 0} caracteres)`,
+          });
 
           const response = await fetch(`${API_URL}/api/email/factura`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              to: emailPendiente.to,
-              subject: emailPendiente.subject,
-              html: emailPendiente.html,
-              filename: pdfGenerado.filename || emailPendiente.filename,
-              pdfBase64: pdfGenerado.pdfBase64,
-            }),
+            body: JSON.stringify(payload),
           });
 
-          const resultado = await response.json();
+          console.log("Estado respuesta email:", response.status);
 
-          if (!response.ok || !resultado.ok) {
+          const textoRespuesta = await response.text();
+
+          console.log("Respuesta sin procesar del backend:", textoRespuesta);
+
+          let resultado = {};
+
+          try {
+            resultado = textoRespuesta ? JSON.parse(textoRespuesta) : {};
+          } catch {
+            throw new Error(
+              `El backend respondió con contenido no válido. Estado ${response.status}`,
+            );
+          }
+
+          console.log("Respuesta del backend:", resultado);
+
+          if (!response.ok || resultado.ok === false) {
             throw new Error(
               resultado?.error ||
                 resultado?.mensaje ||
-                "No se pudo enviar el email",
+                `No se pudo enviar el email. Estado ${response.status}`,
             );
           }
 
@@ -759,13 +815,16 @@ export default function Facturas() {
           );
 
           setEmailPendiente(null);
-          setEnviandoEmail(false);
         }
       } catch (error) {
-        console.error("Error al procesar el PDF:", error);
+        console.error("Error al procesar el PDF o email:", error);
 
-        mostrarNotificacion("No se pudo generar el archivo PDF", "error");
+        mostrarNotificacion(
+          error.message || "No se pudo generar o enviar la factura",
+          "error",
+        );
       } finally {
+        setEnviandoEmail(false);
         setPdfModo(null);
         setPdfNombre("");
         setPdfData(null);

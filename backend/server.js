@@ -908,6 +908,8 @@ app.get("/api/fiscal/certificado/estado/:cuitEmpresa", async (req, res) => {
 });
 
 app.post("/api/email/factura", async (req, res) => {
+  console.log("===== ENTRÓ A /api/email/factura =====");
+  console.log(req.body);
   try {
     const { to, subject, html, pdfBase64, filename } = req.body;
 
@@ -919,7 +921,7 @@ app.post("/api/email/factura", async (req, res) => {
     }
 
     const emailData = {
-      from: "Avance Fiscal <onboarding@resend.dev>",
+      from: "Avance Fiscal <facturas@envios.avancefiscal.com.ar>",
       to,
       subject: subject || "Factura",
       html: html || "<p>Adjuntamos comprobante fiscal.</p>",
