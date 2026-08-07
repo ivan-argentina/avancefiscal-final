@@ -320,8 +320,6 @@ export default function Facturas() {
   };
 
   const descargarPdfFactura = async (factura, modo = "descargar") => {
-    console.log("Entró a descargarPdfFactura");
-    console.log("Modo recibido:", modo);
     try {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
