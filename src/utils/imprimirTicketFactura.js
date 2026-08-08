@@ -1,3 +1,4 @@
+import { configurarQz } from "./configurarQz";
 import qz from "qz-tray";
 import QRCode from "qrcode";
 
@@ -236,6 +237,7 @@ export async function imprimirTicketFactura(datos) {
   /*
    * CONEXIÓN CON QZ TRAY
    */
+  configurarQz();
   if (!qz.websocket.isActive()) {
     await qz.websocket.connect();
   }
@@ -245,12 +247,57 @@ export async function imprimirTicketFactura(datos) {
   if (!impresoras || impresoras.length === 0) {
     throw new Error("No se encontraron impresoras disponibles");
   }
-
+  
   console.log("Impresoras detectadas por QZ Tray:", impresoras);
 
+/*
+ * NORMALIZAR NOMBRES
+ */
+const normalizar = (valor) =>
+  String(valor || "")
+    .trim()
+    .toLowerCase();
+
+/*
+ * IMPRESORA CONFIGURADA EN LA EMPRESA
+ */
+const impresoraGuardada = String(
+  empresa?.impresora_comandera || "",
+).trim();
+
+let nombreImpresora = null;
+
+/*
+ * 1. SI LA EMPRESA TIENE UNA IMPRESORA CONFIGURADA,
+ *    ESA TIENE PRIORIDAD
+ */
+if (impresoraGuardada) {
+  nombreImpresora = impresoras.find(
+    (nombre) =>
+      normalizar(nombre) === normalizar(impresoraGuardada),
+  );
+
   /*
-   * IMPRESORAS VIRTUALES QUE NO QUEREMOS USAR
+   * Si está configurada pero no existe en esta PC,
+   * no elegimos otra impresora automáticamente.
    */
+  if (!nombreImpresora) {
+    throw new Error(
+      `La impresora configurada "${impresoraGuardada}" no está disponible en esta PC. Revisá Configuración.`,
+    );
+  }
+
+  console.log(
+    "Usando impresora configurada:",
+    nombreImpresora,
+  );
+}
+
+/*
+ * 2. SI TODAVÍA NO HAY UNA IMPRESORA CONFIGURADA,
+ *    INTENTAMOS DETECTAR UNA COMANDERA AUTOMÁTICAMENTE
+ */
+if (!nombreImpresora) {
   const impresorasVirtuales = [
     "microsoft print to pdf",
     "microsoft xps",
@@ -260,9 +307,6 @@ export async function imprimirTicketFactura(datos) {
     "qz tray raw print",
   ];
 
-  /*
-   * PALABRAS COMUNES EN IMPRESORAS TÉRMICAS
-   */
   const palabrasComandera = [
     "pos",
     "thermal",
@@ -276,98 +320,64 @@ export async function imprimirTicketFactura(datos) {
     "bematech",
     "elgin",
     "gprinter",
+    "generic / text only",
   ];
 
-  /*
-   * NORMALIZAR NOMBRES
-   */
-  const normalizar = (valor) =>
-    String(valor || "")
-      .trim()
-      .toLowerCase();
+  const candidatas = impresoras.filter((nombre) => {
+    const nombreNormalizado = normalizar(nombre);
 
-  /*
-   * 1. PRIMERO BUSCAMOS LA IMPRESORA GUARDADA
-   *    EN LA CONFIGURACIÓN DE LA EMPRESA
-   */
-  const impresoraGuardada = normalizar(empresa.impresora_comandera);
-
-  let nombreImpresora = null;
-
-  if (impresoraGuardada) {
-    nombreImpresora = impresoras.find(
-      (nombre) => normalizar(nombre) === impresoraGuardada,
+    const esVirtual = impresorasVirtuales.some((virtual) =>
+      nombreNormalizado.includes(virtual),
     );
 
-    if (nombreImpresora) {
-      console.log("Usando comandera configurada:", nombreImpresora);
-    }
-  }
-
-  /*
-   * 2. SI NO HAY UNA CONFIGURADA,
-   *    BUSCAMOS AUTOMÁTICAMENTE
-   */
-  if (!nombreImpresora) {
-    const candidatas = impresoras.filter((nombre) => {
-      const nombreNormalizado = normalizar(nombre);
-
-      const esVirtual = impresorasVirtuales.some((virtual) =>
-        nombreNormalizado.includes(virtual),
-      );
-
-      if (esVirtual) {
-        return false;
-      }
-
-      return palabrasComandera.some((palabra) =>
-        nombreNormalizado.includes(palabra),
-      );
-    });
-
-    console.log("Comanderas detectadas:", candidatas);
-
-    /*
-     * SI HAY UNA SOLA, LA USAMOS
-     */
-    if (candidatas.length === 1) {
-      nombreImpresora = candidatas[0];
+    if (esVirtual) {
+      return false;
     }
 
-    /*
-     * SI HAY VARIAS, NO ELEGIMOS AL AZAR
-     */
-    if (candidatas.length > 1) {
-      throw new Error(
-        `Se encontraron varias comanderas: ${candidatas.join(
-          ", ",
-        )}. Seleccioná una desde Configuración.`,
-      );
-    }
-  }
-
-  /*
-   * 3. SI TODAVÍA NO ENCONTRAMOS NINGUNA
-   */
-  if (!nombreImpresora) {
-    throw new Error(
-      "No se encontró una impresora térmica. Revisá la configuración de la comandera.",
+    return palabrasComandera.some((palabra) =>
+      nombreNormalizado.includes(palabra),
     );
-  }
-
-  console.log("Imprimiendo ticket en:", nombreImpresora);
-
-  /*
-   * CONFIGURACIÓN QZ TRAY
-   */
-  const config = qz.configs.create(nombreImpresora, {
-    encoding: "CP850",
-    copies: 1,
   });
 
+  console.log("Comanderas detectadas:", candidatas);
+
   /*
-   * DATOS DE EMPRESA
+   * Si encontramos una sola, la usamos.
    */
+  if (candidatas.length === 1) {
+    nombreImpresora = candidatas[0];
+  }
+
+  /*
+   * Si encontramos varias, no elegimos al azar.
+   */
+  if (candidatas.length > 1) {
+    throw new Error(
+      "Se encontraron varias impresoras térmicas. Seleccioná la comandera desde Configuración.",
+    );
+  }
+}
+
+/*
+ * 3. SI NO HAY NINGUNA CONFIGURADA NI PUDIMOS
+ *    DETECTAR UNA AUTOMÁTICAMENTE
+ */
+if (!nombreImpresora) {
+  throw new Error(
+    "No se encontró una impresora térmica. Seleccioná una desde Configuración.",
+  );
+}
+
+console.log("Imprimiendo ticket en:", nombreImpresora);
+
+/*
+ * CONFIGURACIÓN QZ TRAY
+ */
+const config = qz.configs.create(nombreImpresora, {
+  encoding: "CP850",
+  copies: 1,
+});
+  
   const nombreFantasia =
     empresa.nombre_fantasia ||
     empresa.nombre ||
