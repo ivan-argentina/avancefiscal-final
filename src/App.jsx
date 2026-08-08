@@ -17,7 +17,7 @@ function App() {
     <ThemeProvider theme={theme}>
       <Routes>
         {/* Login */}
-        <Route path="/" element={<Login />} />
+        <Route path="/" element={<Landing />} />
 
         {/* Landing (solo desarrollo por ahora) */}
         <Route path="/landing" element={<Landing />} />
