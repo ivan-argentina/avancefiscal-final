@@ -1,4 +1,5 @@
 import { useState } from "react";
+import logoAvanceFiscal from "../../assets/logo-avance-fiscal.png";
 
 import {
   AppBar,
@@ -64,31 +65,21 @@ export default function Navbar() {
               }}
             >
               <Box
+                component="img"
+                src={logoAvanceFiscal}
+                alt="Avance Fiscal"
                 sx={{
                   width: {
-                    xs: 40,
-                    md: 46,
+                    xs: 48,
+                    md: 58,
                   },
                   height: {
-                    xs: 40,
-                    md: 46,
+                    xs: 48,
+                    md: 58,
                   },
-                  borderRadius: 2,
-                  bgcolor: "#2563eb",
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontWeight: 800,
-                  fontSize: {
-                    xs: 18,
-                    md: 20,
-                  },
-                  flexShrink: 0,
+                  objectFit: "contain",
                 }}
-              >
-                AF
-              </Box>
+              />
 
               <Box>
                 <Typography
