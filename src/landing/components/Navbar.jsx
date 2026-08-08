@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import {
   AppBar,
   Toolbar,
@@ -5,116 +7,295 @@ import {
   Box,
   Button,
   Typography,
+  IconButton,
+  Drawer,
+  Stack,
 } from "@mui/material";
 
+import MenuRoundedIcon from "@mui/icons-material/MenuRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 
 export default function Navbar() {
+  const [menuAbierto, setMenuAbierto] = useState(false);
+
   const irA = (id) => {
     document.getElementById(id)?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
-  };
-  return (
-    <AppBar
-      position="fixed"
-      elevation={0}
-      sx={{
-        background: "transparent",
-        boxShadow: "none",
-      }}
-    >
-      <Container maxWidth="xl">
-        <Toolbar
-          disableGutters
-          sx={{
-            height: 90,
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          {/* LOGO */}
 
-          <Box
+    setMenuAbierto(false);
+  };
+
+  return (
+    <>
+      <AppBar
+        position="fixed"
+        elevation={0}
+        sx={{
+          background: "rgba(255,255,255,0.92)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(226,232,240,0.8)",
+          boxShadow: "none",
+        }}
+      >
+        <Container maxWidth={false}>
+          <Toolbar
+            disableGutters
             sx={{
+              minHeight: {
+                xs: 72,
+                md: 90,
+              },
               display: "flex",
-              alignItems: "center",
-              gap: 2,
+              justifyContent: "space-between",
             }}
           >
+            {/* LOGO */}
             <Box
               sx={{
-                width: 46,
-                height: 46,
-                borderRadius: 2,
-                bgcolor: "#2563eb",
-                color: "white",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                fontSize: 20,
+                gap: {
+                  xs: 1.2,
+                  md: 2,
+                },
               }}
             >
-              AF
-            </Box>
-
-            <Box>
-              <Typography
+              <Box
                 sx={{
+                  width: {
+                    xs: 40,
+                    md: 46,
+                  },
+                  height: {
+                    xs: 40,
+                    md: 46,
+                  },
+                  borderRadius: 2,
+                  bgcolor: "#2563eb",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontWeight: 800,
-                  fontSize: 20,
-                  lineHeight: 1.1,
-                  color: "#0f172a",
+                  fontSize: {
+                    xs: 18,
+                    md: 20,
+                  },
+                  flexShrink: 0,
                 }}
               >
-                Avance Fiscal
-              </Typography>
+                AF
+              </Box>
 
-              <Typography
-                sx={{
-                  color: "#64748b",
-                  fontSize: 13,
-                }}
-              >
-                Sistema de Gestión
-              </Typography>
+              <Box>
+                <Typography
+                  sx={{
+                    fontWeight: 800,
+                    fontSize: {
+                      xs: 17,
+                      md: 20,
+                    },
+                    lineHeight: 1.1,
+                    color: "#0f172a",
+                  }}
+                >
+                  Avance Fiscal
+                </Typography>
+
+                <Typography
+                  sx={{
+                    display: {
+                      xs: "none",
+                      sm: "block",
+                    },
+                    color: "#64748b",
+                    fontSize: 13,
+                  }}
+                >
+                  Sistema de Gestión
+                </Typography>
+              </Box>
             </Box>
-          </Box>
 
-          {/* MENÚ */}
+            {/* MENÚ DESKTOP */}
+            <Box
+              sx={{
+                display: {
+                  xs: "none",
+                  md: "flex",
+                },
+                alignItems: "center",
+                color: "#334155",
+                fontWeight: 600,
+              }}
+            >
+              <Button color="inherit" onClick={() => irA("funciones")}>
+                Funciones
+              </Button>
 
-          <Box
+              <Button color="inherit" onClick={() => irA("capturas")}>
+                Capturas
+              </Button>
+
+              <Button color="inherit" onClick={() => irA("planes")}>
+                Planes
+              </Button>
+
+              <Button color="inherit" onClick={() => irA("contacto")}>
+                Contacto
+              </Button>
+
+              <Button
+                variant="contained"
+                startIcon={<LoginRoundedIcon />}
+                href="/"
+                sx={{
+                  ml: 1.5,
+                  borderRadius: 3,
+                  textTransform: "none",
+                  bgcolor: "#10b981",
+                  px: 2.5,
+                  "&:hover": {
+                    bgcolor: "#059669",
+                  },
+                }}
+              >
+                Ingresar
+              </Button>
+            </Box>
+
+            {/* BOTÓN HAMBURGUESA MOBILE */}
+            <IconButton
+              onClick={() => setMenuAbierto(true)}
+              sx={{
+                display: {
+                  xs: "flex",
+                  md: "none",
+                },
+                color: "#0f172a",
+                width: 44,
+                height: 44,
+              }}
+            >
+              <MenuRoundedIcon />
+            </IconButton>
+          </Toolbar>
+        </Container>
+      </AppBar>
+
+      {/* MENÚ MOBILE */}
+      <Drawer
+        anchor="right"
+        open={menuAbierto}
+        onClose={() => setMenuAbierto(false)}
+        PaperProps={{
+          sx: {
+            width: {
+              xs: "82%",
+              sm: 320,
+            },
+            maxWidth: 340,
+            p: 2.5,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            justifyContent: "flex-end",
+            mb: 2,
+          }}
+        >
+          <IconButton onClick={() => setMenuAbierto(false)}>
+            <CloseRoundedIcon />
+          </IconButton>
+        </Box>
+
+        <Stack spacing={1}>
+          <Button
+            fullWidth
+            onClick={() => irA("funciones")}
             sx={{
-              color: "#334155",
-              fontWeight: 600,
+              justifyContent: "flex-start",
               textTransform: "none",
-              transition: "color .25s ease",
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#0f172a",
+              py: 1.4,
+            }}
+          >
+            Funciones
+          </Button>
+
+          <Button
+            fullWidth
+            onClick={() => irA("capturas")}
+            sx={{
+              justifyContent: "flex-start",
+              textTransform: "none",
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#0f172a",
+              py: 1.4,
+            }}
+          >
+            Capturas
+          </Button>
+
+          <Button
+            fullWidth
+            onClick={() => irA("planes")}
+            sx={{
+              justifyContent: "flex-start",
+              textTransform: "none",
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#0f172a",
+              py: 1.4,
+            }}
+          >
+            Planes
+          </Button>
+
+          <Button
+            fullWidth
+            onClick={() => irA("contacto")}
+            sx={{
+              justifyContent: "flex-start",
+              textTransform: "none",
+              fontSize: 17,
+              fontWeight: 700,
+              color: "#0f172a",
+              py: 1.4,
+            }}
+          >
+            Contacto
+          </Button>
+
+          <Button
+            fullWidth
+            variant="contained"
+            startIcon={<LoginRoundedIcon />}
+            href="/"
+            sx={{
+              mt: 2,
+              py: 1.4,
+              borderRadius: 3,
+              textTransform: "none",
+              fontWeight: 700,
+              bgcolor: "#10b981",
               "&:hover": {
-                color: "#2563eb",
-                backgroundColor: "transparent",
+                bgcolor: "#059669",
               },
             }}
           >
-            <Button color="inherit" onClick={() => irA("funciones")}>
-              Funciones
-            </Button>
-
-            <Button color="inherit" onClick={() => irA("capturas")}>
-              Capturas
-            </Button>
-
-            <Button color="inherit" onClick={() => irA("planes")}>
-              Planes
-            </Button>
-
-            <Button color="inherit" onClick={() => irA("contacto")}>
-              Contacto
-            </Button>
-          </Box>
-        </Toolbar>
-      </Container>
-    </AppBar>
+            Ingresar
+          </Button>
+        </Stack>
+      </Drawer>
+    </>
   );
 }
