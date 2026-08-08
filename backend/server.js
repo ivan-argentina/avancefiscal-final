@@ -7,6 +7,7 @@ import { obtenerTokenSign } from "./wsaa.js";
 import { obtenerUltimoComprobante, autorizarFactura } from "./wsfe.js";
 import soap from "soap";
 import { Resend } from "resend";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -1627,6 +1628,73 @@ app.post("/api/email/bienvenida-usuario", async (req, res) => {
       ok: false,
       error: error?.message || "No se pudo enviar el correo de bienvenida.",
     });
+  }
+});
+/*
+ * =========================================================
+ * QZ TRAY - CERTIFICADO Y FIRMA
+ * =========================================================
+ */
+
+/*
+ * DEVUELVE EL CERTIFICADO PÚBLICO A QZ TRAY
+ */
+app.get("/api/qz/certificate", (req, res) => {
+  try {
+    const certificate = process.env.QZ_CERTIFICATE;
+
+    if (!certificate) {
+      return res.status(500).send("Certificado QZ no configurado");
+    }
+
+    /*
+     * Railway guarda los saltos de línea como \n.
+     * Los convertimos nuevamente a saltos reales.
+     */
+    const certificadoFormateado = certificate.replace(/\\n/g, "\n");
+
+    res.type("text/plain").send(certificadoFormateado);
+  } catch (error) {
+    console.error("Error obteniendo certificado QZ:", error);
+
+    res.status(500).send("Error obteniendo certificado QZ");
+  }
+});
+
+/*
+ * FIRMA LAS SOLICITUDES DE QZ TRAY
+ */
+app.post("/api/qz/sign", (req, res) => {
+  try {
+    const { request } = req.body;
+
+    if (!request) {
+      return res.status(400).send("Falta el contenido para firmar");
+    }
+
+    const privateKey = process.env.QZ_PRIVATE_KEY;
+
+    if (!privateKey) {
+      return res.status(500).send("Clave privada QZ no configurada");
+    }
+
+    const claveFormateada = privateKey.replace(/\\n/g, "\n");
+
+    const signer = crypto.createSign("SHA512");
+
+    signer.update(request);
+    signer.end();
+
+    const signature = signer.sign(
+      claveFormateada,
+      "base64",
+    );
+
+    res.type("text/plain").send(signature);
+  } catch (error) {
+    console.error("Error firmando solicitud QZ:", error);
+
+    res.status(500).send("Error firmando solicitud QZ");
   }
 });
 const PORT = Number(process.env.PORT) || 3001;
