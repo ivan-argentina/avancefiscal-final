@@ -1,5 +1,6 @@
 import { useState } from "react";
 import logoAvanceFiscal from "../../assets/logo-avance-fiscal.png";
+import { useNavigate } from "react-router-dom";
 
 import {
   AppBar,
@@ -18,6 +19,7 @@ import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import LoginRoundedIcon from "@mui/icons-material/LoginRounded";
 
 export default function Navbar() {
+  const navigate = useNavigate();
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   const irA = (id) => {
@@ -142,7 +144,7 @@ export default function Navbar() {
               <Button
                 variant="contained"
                 startIcon={<LoginRoundedIcon />}
-                href="/"
+                href="/login"
                 sx={{
                   ml: 1.5,
                   borderRadius: 3,

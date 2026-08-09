@@ -18,6 +18,7 @@ function App() {
       <Routes>
         {/* Login */}
         <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
 
         {/* Landing (solo desarrollo por ahora) */}
         <Route path="/landing" element={<Landing />} />
