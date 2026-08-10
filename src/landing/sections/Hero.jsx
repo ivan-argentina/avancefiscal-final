@@ -88,12 +88,12 @@ export default function Hero() {
     <Box
       component="section"
       sx={{
-        minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         overflow: "hidden",
         pt: { xs: 12, md: 15 },
-        pb: { xs: 8, md: 12 },
+        pb: { xs: 5, md: 7 },
+
         background: `
           radial-gradient(
             circle at 80% 20%,

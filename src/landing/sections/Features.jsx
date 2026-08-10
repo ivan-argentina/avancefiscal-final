@@ -52,7 +52,11 @@ export default function Features() {
       component="section"
       id="funciones"
       sx={{
-        pt: { xs: 4, md: 14 },
+        scrollMarginTop: {
+          xs: "110px",
+          md: "120px",
+        },
+        pt: { xs: 2, md: 3 },
         pb: { xs: 9, md: 14 },
         bgcolor: "#f8fafc",
       }}
