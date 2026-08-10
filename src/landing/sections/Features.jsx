@@ -52,7 +52,8 @@ export default function Features() {
       component="section"
       id="funciones"
       sx={{
-        py: { xs: 9, md: 14 },
+        pt: { xs: 4, md: 14 },
+        pb: { xs: 9, md: 14 },
         bgcolor: "#f8fafc",
       }}
     >
