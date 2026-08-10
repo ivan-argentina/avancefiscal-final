@@ -1,3 +1,4 @@
+import { configurarQz } from "./configurarQz";
 import qz from "qz-tray";
 import QRCode from "qrcode";
 
@@ -143,94 +144,88 @@ const convertirImagenABase64 = async (url) => {
 };
 
 export async function imprimirTicketFactura(datos) {
- //Agregamos numeros para el qr
-  const soloNumeros = (valor = "") =>
-  String(valor).replace(/\D/g, "");
+  //Agregamos numeros para el qr
+  const soloNumeros = (valor = "") => String(valor).replace(/\D/g, "");
 
-const obtenerTipoComprobanteAfip = (
-  tipoComprobante,
-  letraComprobante,
-) => {
-  const letra = String(letraComprobante || "").toUpperCase();
+  const obtenerTipoComprobanteAfip = (tipoComprobante, letraComprobante) => {
+    const letra = String(letraComprobante || "").toUpperCase();
 
-  if (tipoComprobante === "nota_de_credito") {
-    if (letra === "A") return 3;
-    if (letra === "B") return 8;
-    if (letra === "C") return 13;
-  }
+    if (tipoComprobante === "nota_de_credito") {
+      if (letra === "A") return 3;
+      if (letra === "B") return 8;
+      if (letra === "C") return 13;
+    }
 
-  if (letra === "A") return 1;
-  if (letra === "B") return 6;
-  if (letra === "C") return 11;
+    if (letra === "A") return 1;
+    if (letra === "B") return 6;
+    if (letra === "C") return 11;
 
-  return null;
-};
-
-const convertirTextoABase64 = (texto) => {
-  const bytes = new TextEncoder().encode(texto);
-  let binario = "";
-
-  bytes.forEach((byte) => {
-    binario += String.fromCharCode(byte);
-  });
-
-  return btoa(binario);
-};
-
-const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
-  const cuitEmpresa = soloNumeros(empresa.cuit);
-  const cuitCliente = soloNumeros(cliente.cuit);
-
-  const tipoComprobanteAfip = obtenerTipoComprobanteAfip(
-    datos.tipoComprobante,
-    datos.letraComprobante,
-  );
-
-  if (
-    !cuitEmpresa ||
-    !datos.cae ||
-    !tipoComprobanteAfip ||
-    !datos.numeroFactura
-  ) {
     return null;
-  }
-
-  const datosQr = {
-    ver: 1,
-    fecha: String(datos.fecha).slice(0, 10),
-    cuit: Number(cuitEmpresa),
-    ptoVta: Number(datos.puntoVenta),
-    tipoCmp: tipoComprobanteAfip,
-    nroCmp: Number(datos.numeroFactura),
-    importe: Number(datos.totalFactura),
-    moneda: "PES",
-    ctz: 1,
-    tipoCodAut: "E",
-    codAut: Number(datos.cae),
   };
 
-  if (cuitCliente.length === 11) {
-    datosQr.tipoDocRec = 80;
-    datosQr.nroDocRec = Number(cuitCliente);
-  } else {
-    datosQr.tipoDocRec = 99;
-    datosQr.nroDocRec = 0;
-  }
+  const convertirTextoABase64 = (texto) => {
+    const bytes = new TextEncoder().encode(texto);
+    let binario = "";
 
-  const jsonBase64 = convertirTextoABase64(
-    JSON.stringify(datosQr),
-  );
+    bytes.forEach((byte) => {
+      binario += String.fromCharCode(byte);
+    });
 
-  const urlQr = `https://www.arca.gob.ar/fe/qr/?p=${jsonBase64}`;
+    return btoa(binario);
+  };
 
-  const qrDataUrl = await QRCode.toDataURL(urlQr, {
-    errorCorrectionLevel: "M",
-    margin: 1,
-    width: 220,
-  });
+  const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
+    const cuitEmpresa = soloNumeros(empresa.cuit);
+    const cuitCliente = soloNumeros(cliente.cuit);
 
-  return qrDataUrl.split(",")[1];
-};
+    const tipoComprobanteAfip = obtenerTipoComprobanteAfip(
+      datos.tipoComprobante,
+      datos.letraComprobante,
+    );
+
+    if (
+      !cuitEmpresa ||
+      !datos.cae ||
+      !tipoComprobanteAfip ||
+      !datos.numeroFactura
+    ) {
+      return null;
+    }
+
+    const datosQr = {
+      ver: 1,
+      fecha: String(datos.fecha).slice(0, 10),
+      cuit: Number(cuitEmpresa),
+      ptoVta: Number(datos.puntoVenta),
+      tipoCmp: tipoComprobanteAfip,
+      nroCmp: Number(datos.numeroFactura),
+      importe: Number(datos.totalFactura),
+      moneda: "PES",
+      ctz: 1,
+      tipoCodAut: "E",
+      codAut: Number(datos.cae),
+    };
+
+    if (cuitCliente.length === 11) {
+      datosQr.tipoDocRec = 80;
+      datosQr.nroDocRec = Number(cuitCliente);
+    } else {
+      datosQr.tipoDocRec = 99;
+      datosQr.nroDocRec = 0;
+    }
+
+    const jsonBase64 = convertirTextoABase64(JSON.stringify(datosQr));
+
+    const urlQr = `https://www.arca.gob.ar/fe/qr/?p=${jsonBase64}`;
+
+    const qrDataUrl = await QRCode.toDataURL(urlQr, {
+      errorCorrectionLevel: "M",
+      margin: 1,
+      width: 220,
+    });
+
+    return qrDataUrl.split(",")[1];
+  };
   if (!datos) {
     throw new Error("No se recibieron datos para imprimir");
   }
@@ -242,6 +237,7 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
   /*
    * CONEXIÓN CON QZ TRAY
    */
+  configurarQz();
   if (!qz.websocket.isActive()) {
     await qz.websocket.connect();
   }
@@ -251,20 +247,137 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
   if (!impresoras || impresoras.length === 0) {
     throw new Error("No se encontraron impresoras disponibles");
   }
+  
+  console.log("Impresoras detectadas por QZ Tray:", impresoras);
 
-  const nombreImpresora =
-    impresoras.find((nombre) =>
-      String(nombre).toLowerCase().includes("pos"),
-    ) || impresoras[0];
+/*
+ * NORMALIZAR NOMBRES
+ */
+const normalizar = (valor) =>
+  String(valor || "")
+    .trim()
+    .toLowerCase();
 
-  const config = qz.configs.create(nombreImpresora, {
-    encoding: "CP850",
-    copies: 1,
-  });
+/*
+ * IMPRESORA CONFIGURADA EN LA EMPRESA
+ */
+const impresoraGuardada = String(
+  empresa?.impresora_comandera || "",
+).trim();
+
+let nombreImpresora = null;
+
+/*
+ * 1. SI LA EMPRESA TIENE UNA IMPRESORA CONFIGURADA,
+ *    ESA TIENE PRIORIDAD
+ */
+if (impresoraGuardada) {
+  nombreImpresora = impresoras.find(
+    (nombre) =>
+      normalizar(nombre) === normalizar(impresoraGuardada),
+  );
 
   /*
-   * DATOS DE EMPRESA
+   * Si está configurada pero no existe en esta PC,
+   * no elegimos otra impresora automáticamente.
    */
+  if (!nombreImpresora) {
+    throw new Error(
+      `La impresora configurada "${impresoraGuardada}" no está disponible en esta PC. Revisá Configuración.`,
+    );
+  }
+
+  console.log(
+    "Usando impresora configurada:",
+    nombreImpresora,
+  );
+}
+
+/*
+ * 2. SI TODAVÍA NO HAY UNA IMPRESORA CONFIGURADA,
+ *    INTENTAMOS DETECTAR UNA COMANDERA AUTOMÁTICAMENTE
+ */
+if (!nombreImpresora) {
+  const impresorasVirtuales = [
+    "microsoft print to pdf",
+    "microsoft xps",
+    "onenote",
+    "fax",
+    "qz_tray raw print",
+    "qz tray raw print",
+  ];
+
+  const palabrasComandera = [
+    "pos",
+    "thermal",
+    "ticket",
+    "receipt",
+    "slk",
+    "xprinter",
+    "xp-",
+    "epson tm",
+    "tm-t",
+    "bematech",
+    "elgin",
+    "gprinter",
+    "generic / text only",
+  ];
+
+  const candidatas = impresoras.filter((nombre) => {
+    const nombreNormalizado = normalizar(nombre);
+
+    const esVirtual = impresorasVirtuales.some((virtual) =>
+      nombreNormalizado.includes(virtual),
+    );
+
+    if (esVirtual) {
+      return false;
+    }
+
+    return palabrasComandera.some((palabra) =>
+      nombreNormalizado.includes(palabra),
+    );
+  });
+
+  console.log("Comanderas detectadas:", candidatas);
+
+  /*
+   * Si encontramos una sola, la usamos.
+   */
+  if (candidatas.length === 1) {
+    nombreImpresora = candidatas[0];
+  }
+
+  /*
+   * Si encontramos varias, no elegimos al azar.
+   */
+  if (candidatas.length > 1) {
+    throw new Error(
+      "Se encontraron varias impresoras térmicas. Seleccioná la comandera desde Configuración.",
+    );
+  }
+}
+
+/*
+ * 3. SI NO HAY NINGUNA CONFIGURADA NI PUDIMOS
+ *    DETECTAR UNA AUTOMÁTICAMENTE
+ */
+if (!nombreImpresora) {
+  throw new Error(
+    "No se encontró una impresora térmica. Seleccioná una desde Configuración.",
+  );
+}
+
+console.log("Imprimiendo ticket en:", nombreImpresora);
+
+/*
+ * CONFIGURACIÓN QZ TRAY
+ */
+const config = qz.configs.create(nombreImpresora, {
+  encoding: "CP850",
+  copies: 1,
+});
+  
   const nombreFantasia =
     empresa.nombre_fantasia ||
     empresa.nombre ||
@@ -272,45 +385,32 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
     "Avance Fiscal";
 
   const razonSocial =
-    empresa.razon_social &&
-    empresa.razon_social !== nombreFantasia
+    empresa.razon_social && empresa.razon_social !== nombreFantasia
       ? empresa.razon_social
       : "";
 
-  const localidadEmpresa =
-    empresa.localidad ||
-    empresa.ciudades?.nombre ||
-    "";
+  const localidadEmpresa = empresa.localidad || empresa.ciudades?.nombre || "";
 
   const provinciaEmpresa =
-    empresa.provincia ||
-    empresa.ciudades?.provincia ||
-    "";
+    empresa.provincia || empresa.ciudades?.provincia || "";
 
   const ubicacionEmpresa = [localidadEmpresa, provinciaEmpresa]
     .filter(Boolean)
     .join(" - ");
 
   const condicionIvaEmpresa =
-    empresa.condicion_iva ||
-    empresa.condicionIva ||
-    "";
+    empresa.condicion_iva || empresa.condicionIva || "";
 
   /*
    * DATOS DEL COMPROBANTE
    */
-  const nombreComprobante = obtenerNombreComprobante(
-    datos.tipoComprobante,
-  );
+  const nombreComprobante = obtenerNombreComprobante(datos.tipoComprobante);
 
   const letra = datos.letraComprobante || "";
 
   const puntoVenta = String(datos.puntoVenta || 0).padStart(4, "0");
 
-  const numeroFactura = String(datos.numeroFactura || 0).padStart(
-    8,
-    "0",
-  );
+  const numeroFactura = String(datos.numeroFactura || 0).padStart(8, "0");
 
   const fecha = formatearFecha(datos.fecha);
   const hora = formatearHora(datos.hora);
@@ -319,8 +419,7 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
    * DATOS DEL CLIENTE
    */
   const ciudadCliente = obtenerCiudadCliente(cliente);
-  const condicionIvaCliente =
-    obtenerCondicionIvaCliente(cliente);
+  const condicionIvaCliente = obtenerCondicionIvaCliente(cliente);
 
   /*
    * ARMADO DE IMPRESIÓN
@@ -341,9 +440,7 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
    */
   if (empresa.logo_url) {
     try {
-      const logoBase64 = await convertirImagenABase64(
-        empresa.logo_url,
-      );
+      const logoBase64 = await convertirImagenABase64(empresa.logo_url);
 
       datosImpresion.push(comando(CMD_CENTRAR));
 
@@ -353,15 +450,14 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
         flavor: "base64",
         data: logoBase64,
         options: {
-           language: "escpos",
-           dotDensity: "single",
-           imageEncoding: "gs_v_0",
-           width: 220,
-           height: 100,
+          language: "escpos",
+          dotDensity: "single",
+          imageEncoding: "gs_v_0",
+          width: 220,
+          height: 100,
         },
       });
 
-     
       datosImpresion.push(comando(CMD_IZQUIERDA));
     } catch (error) {
       // Si falla el logo, el ticket continúa normalmente.
@@ -385,22 +481,16 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
   }
 
   if (empresa.direccion) {
-    datosImpresion.push(
-      texto(`${cortar(empresa.direccion)}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(empresa.direccion)}\n`));
   }
 
   if (ubicacionEmpresa) {
-    datosImpresion.push(
-      texto(`${cortar(ubicacionEmpresa)}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(ubicacionEmpresa)}\n`));
   }
 
   if (condicionIvaEmpresa) {
     datosImpresion.push(
-      texto(
-        `IVA ${cortar(condicionIvaEmpresa, ANCHO - 4)}\n`,
-      ),
+      texto(`IVA ${cortar(condicionIvaEmpresa, ANCHO - 4)}\n`),
     );
   }
 
@@ -428,18 +518,11 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
    * CLIENTE
    */
   datosImpresion.push(
-    texto(
-      `${cortar(
-        cliente.nombre || "Consumidor Final",
-        ANCHO,
-      )}\n`,
-    ),
+    texto(`${cortar(cliente.nombre || "Consumidor Final", ANCHO)}\n`),
   );
 
   if (cliente.direccion) {
-    datosImpresion.push(
-      texto(`${cortar(cliente.direccion)}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(cliente.direccion)}\n`));
   }
 
   if (cliente.cuit) {
@@ -448,25 +531,16 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
 
   if (condicionIvaCliente) {
     datosImpresion.push(
-      texto(
-        `IVA ${cortar(
-          condicionIvaCliente,
-          ANCHO - 4,
-        )}\n`,
-      ),
+      texto(`IVA ${cortar(condicionIvaCliente, ANCHO - 4)}\n`),
     );
   }
 
   if (ciudadCliente) {
-    datosImpresion.push(
-      texto(`${cortar(ciudadCliente)}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(ciudadCliente)}\n`));
   }
 
   if (datos.formaPago) {
-    datosImpresion.push(
-      texto(`${cortar(datos.formaPago)}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(datos.formaPago)}\n`));
   }
 
   datosImpresion.push(texto(linea()));
@@ -480,17 +554,10 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
     const subtotal = formatearNumero(item.subtotal);
 
     datosImpresion.push(
-      texto(
-        dosColumnas(
-          `${cantidad} u x ${precio}`,
-          subtotal,
-        ),
-      ),
+      texto(dosColumnas(`${cantidad} u x ${precio}`, subtotal)),
     );
 
-    datosImpresion.push(
-      texto(`${cortar(item.descripcion || "")}\n`),
-    );
+    datosImpresion.push(texto(`${cortar(item.descripcion || "")}\n`));
   });
 
   datosImpresion.push(texto(linea()));
@@ -499,32 +566,17 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
    * TOTALES
    */
   datosImpresion.push(
-    texto(
-      dosColumnas(
-        "Subt. Imp. NETO GRAVADO",
-        formatearNumero(datos.neto),
-      ),
-    ),
+    texto(dosColumnas("Subt. Imp. NETO GRAVADO", formatearNumero(datos.neto))),
   );
 
   datosImpresion.push(
-    texto(
-      dosColumnas(
-        "ALICUOTA 21.00%",
-        formatearNumero(datos.iva),
-      ),
-    ),
+    texto(dosColumnas("ALICUOTA 21.00%", formatearNumero(datos.iva))),
   );
 
   datosImpresion.push(comando(CMD_DOBLE_ALTO));
 
   datosImpresion.push(
-    texto(
-      dosColumnas(
-        "TOTAL:",
-        formatearNumero(datos.totalFactura),
-      ),
-    ),
+    texto(dosColumnas("TOTAL:", formatearNumero(datos.totalFactura))),
   );
 
   datosImpresion.push(comando(CMD_NORMAL));
@@ -539,62 +591,47 @@ const generarQrFiscalBase64 = async (datos, empresa, cliente) => {
 
   if (datos.vencimientoCae) {
     datosImpresion.push(
-      texto(
-        `Vto. CAE: ${formatearFecha(
-          datos.vencimientoCae,
-        )}\n`,
-      ),
+      texto(`Vto. CAE: ${formatearFecha(datos.vencimientoCae)}\n`),
     );
   }
   //imprimimos el qr fiscal
   try {
-  const qrFiscalBase64 = await generarQrFiscalBase64(
-    datos,
-    empresa,
-    cliente,
-  );
+    const qrFiscalBase64 = await generarQrFiscalBase64(datos, empresa, cliente);
 
-  if (qrFiscalBase64) {
-    datosImpresion.push(texto("\n"));
-    datosImpresion.push(comando(CMD_CENTRAR));
+    if (qrFiscalBase64) {
+      datosImpresion.push(texto("\n"));
+      datosImpresion.push(comando(CMD_CENTRAR));
 
-    datosImpresion.push({
-      type: "raw",
-      format: "image",
-      flavor: "base64",
-      data: qrFiscalBase64,
-      options: {
-        language: "escpos",
-        dotDensity: "single",
-        imageEncoding: "gs_v_0",
-        quantization: "black",
-        width: 220,
-        height: 220,
-      },
-    });
+      datosImpresion.push({
+        type: "raw",
+        format: "image",
+        flavor: "base64",
+        data: qrFiscalBase64,
+        options: {
+          language: "escpos",
+          dotDensity: "single",
+          imageEncoding: "gs_v_0",
+          quantization: "black",
+          width: 220,
+          height: 220,
+        },
+      });
 
-    datosImpresion.push(texto("\n"));
-    datosImpresion.push(texto("Comprobante autorizado\n"));
-    datosImpresion.push(comando(CMD_IZQUIERDA));
+      datosImpresion.push(texto("\n"));
+      datosImpresion.push(texto("Comprobante autorizado\n"));
+      datosImpresion.push(comando(CMD_IZQUIERDA));
+    }
+  } catch (error) {
+    console.error("No se pudo generar el QR fiscal:", error);
   }
-} catch (error) {
-  console.error("No se pudo generar el QR fiscal:", error);
-}
 
   if (datos.numeroOrigen) {
-    datosImpresion.push(
-      texto(`Comprobante asociado: ${datos.numeroOrigen}\n`),
-    );
+    datosImpresion.push(texto(`Comprobante asociado: ${datos.numeroOrigen}\n`));
   }
 
   if (datos.observaciones) {
     datosImpresion.push(
-      texto(
-        `Observaciones: ${cortar(
-          datos.observaciones,
-          ANCHO - 15,
-        )}\n`,
-      ),
+      texto(`Observaciones: ${cortar(datos.observaciones, ANCHO - 15)}\n`),
     );
   }
 

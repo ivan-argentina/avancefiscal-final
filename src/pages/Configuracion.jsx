@@ -1,23 +1,144 @@
-import { Container, Paper, Typography, Grid } from "@mui/material";
-import MenuItem from "@mui/material/MenuItem";
+import {
+  Container,
+  Paper,
+  Typography,
+  Grid,
+  Box,
+  Button,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  Snackbar,
+  Alert,
+} from "@mui/material";
+import { configurarQz } from "../utils/configurarQz";
 import { useState, useEffect } from "react";
 import { TextField } from "@mui/material";
 import { supabase } from "../hook/supabaseClient";
 import Notificaciones from "./Notificaciones";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 
-import { Box, Button } from "@mui/material";
 import SaveIcon from "@mui/icons-material/Save";
+import qz from "qz-tray";
 
 export default function Configuracion() {
   const [tipoImpresion, setTipoImpresion] = useState("laser");
   const [open, setOpen] = useState(false);
-  const [mensaje, setMensaje] = useState("");
   const [tipo, setTipo] = useState("success");
+  const [impresoras, setImpresoras] = useState([]);
+  const [impresoraComandera, setImpresoraComandera] = useState("");
+  const [qzConectado, setQzConectado] = useState(false);
+  const [mensaje, setMensaje] = useState("");
+  const [tipoMensaje, setTipoMensaje] = useState("success");
+  const [openMensaje, setOpenMensaje] = useState(false);
+
+  const mostrarMensaje = (texto, tipo = "success") => {
+    setMensaje(texto);
+    setTipoMensaje(tipo);
+    setOpenMensaje(true);
+  };
 
   useEffect(() => {
-    cargarConfiguracion();
-  }, []);
+    if (tipoImpresion === "comandera") {
+      cargarImpresoras();
+    }
+  }, [tipoImpresion]);
+
+  const probarImpresora = async () => {
+    try {
+      configurarQz();
+      if (!impresoraComandera) {
+        mostrarMensaje("Seleccioná una impresora.", "warning");
+        return;
+      }
+
+      if (!qz.websocket.isActive()) {
+        await qz.websocket.connect();
+      }
+
+      const impresorasDisponibles = await qz.printers.find();
+
+      const existe = impresorasDisponibles.some(
+        (nombre) =>
+          String(nombre).trim().toLowerCase() ===
+          String(impresoraComandera).trim().toLowerCase(),
+      );
+
+      if (!existe) {
+        mostrarMensaje(
+          `La impresora "${impresoraComandera}" no está disponible en esta PC.`,
+          "error",
+        );
+        return;
+      }
+
+      const config = qz.configs.create(impresoraComandera, {
+        encoding: "CP850",
+        copies: 1,
+      });
+
+      const datosPrueba = [
+        {
+          type: "raw",
+          format: "command",
+          flavor: "hex",
+          data: "1B40",
+        },
+        {
+          type: "raw",
+          format: "command",
+          flavor: "plain",
+          data:
+            "\n" +
+            "          AVANCE FISCAL\n" +
+            "------------------------------------------\n" +
+            "Prueba de impresion\n" +
+            `Impresora: ${impresoraComandera}\n` +
+            "Configuracion correcta\n" +
+            "------------------------------------------\n" +
+            "\n\n\n",
+        },
+        {
+          type: "raw",
+          format: "command",
+          flavor: "hex",
+          data: "1D564100",
+        },
+      ];
+
+      await qz.print(config, datosPrueba);
+
+      mostrarMensaje("Prueba de impresión enviada correctamente.", "success");
+    } catch (error) {
+      console.error("Error en prueba de impresión:", error);
+
+      alert(error?.message || "No se pudo realizar la prueba de impresión.");
+    }
+  };
+
+  const cargarImpresoras = async () => {
+    try {
+      configurarQz();
+
+      if (!qz.websocket.isActive()) {
+        await qz.websocket.connect();
+      }
+
+      setQzConectado(true);
+
+      const lista = await qz.printers.find();
+
+      setImpresoras(lista || []);
+
+      console.log("Impresoras detectadas:", lista);
+    } catch (error) {
+      console.error("Error al detectar impresoras:", error);
+
+      setQzConectado(false);
+      setImpresoras([]);
+    }
+  };
 
   const guardarConfiguracion = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
@@ -27,6 +148,7 @@ export default function Configuracion() {
       .from("empresas")
       .update({
         tipo_impresion: tipoImpresion,
+        impresora_comandera: impresoraComandera,
       })
       .eq("id", idEmpresa);
 
@@ -45,21 +167,28 @@ export default function Configuracion() {
   };
   const cargarConfiguracion = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+    if (!usuarioGuardado?.id) return;
+
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
 
     const { data, error } = await supabase
       .from("empresas")
-      .select("tipo_impresion")
+      .select("tipo_impresion, impresora_comandera")
       .eq("id", idEmpresa)
       .single();
 
     if (error) {
-      console.error(error);
+      console.error("Error al cargar configuración:", error);
       return;
     }
 
     setTipoImpresion(data.tipo_impresion || "laser");
+    setImpresoraComandera(data.impresora_comandera || "");
   };
+  useEffect(() => {
+    cargarConfiguracion();
+  }, []);
 
   return (
     <Container maxWidth="md">
@@ -75,44 +204,128 @@ export default function Configuracion() {
 
       <Grid container spacing={3}>
         <Grid size={{ xs: 12 }}>
-          <Paper
+          <Box
             sx={{
-              p: 3,
-              borderRadius: 3,
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              flexWrap: "wrap",
             }}
           >
-            <Grid container spacing={2} sx={{ mt: 2 }}>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <TextField
-                  select
-                  fullWidth
-                  label="Tipo de impresión"
-                  value={tipoImpresion}
-                  onChange={(e) => setTipoImpresion(e.target.value)}
+            {/* TIPO DE IMPRESIÓN */}
+            <TextField
+              select
+              label="Tipo de impresión"
+              value={tipoImpresion}
+              onChange={(e) => setTipoImpresion(e.target.value)}
+              size="small"
+              sx={{ width: 200 }}
+            >
+              <MenuItem value="laser">Láser</MenuItem>
+              <MenuItem value="comandera">Comandera</MenuItem>
+            </TextField>
+
+            {/* IMPRESORA DE COMANDERA */}
+            {tipoImpresion === "comandera" && (
+              <FormControl size="small" sx={{ width: 260 }}>
+                <InputLabel>Impresora de comandera</InputLabel>
+
+                <Select
+                  value={
+                    impresoras.includes(impresoraComandera)
+                      ? impresoraComandera
+                      : ""
+                  }
+                  label="Impresora de comandera"
+                  onChange={(e) => setImpresoraComandera(e.target.value)}
                 >
-                  <MenuItem value="laser">Láser</MenuItem>
-                  <MenuItem value="comandera">Comandera</MenuItem>
-                </TextField>
-              </Grid>
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  mt: 3,
-                }}
-              >
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={guardarConfiguracion}
-                >
-                  Guardar
-                </Button>
-              </Box>
-            </Grid>
-          </Paper>
+                  {impresoras.map((impresora) => (
+                    <MenuItem key={impresora} value={impresora}>
+                      {impresora}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {/* BOTÓN GUARDAR */}
+            <Button
+              variant="contained"
+              startIcon={<SaveIcon />}
+              onClick={guardarConfiguracion}
+              sx={{
+                height: 40,
+                px: 3,
+                whiteSpace: "nowrap",
+              }}
+            >
+              GUARDAR
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={probarImpresora}
+              disabled={!impresoraComandera}
+              sx={{
+                height: 40,
+                px: 2.5,
+                whiteSpace: "nowrap",
+              }}
+            >
+              PROBAR IMPRESIÓN
+            </Button>
+          </Box>
         </Grid>
       </Grid>
+      {/* ESTADO DE QZ TRAY */}
+      <Box
+        sx={{
+          mt: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+        }}
+      >
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+            color: qzConectado ? "success.main" : "error.main",
+          }}
+        >
+          {qzConectado ? "● QZ Tray conectado" : "● QZ Tray no detectado"}
+        </Typography>
+
+        {!qzConectado && (
+          <Button
+            variant="outlined"
+            size="small"
+            href="https://qz.io/download/?os=windows"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ textTransform: "none" }}
+          >
+            Descargar QZ Tray
+          </Button>
+        )}
+      </Box>
+      <Snackbar
+        open={openMensaje}
+        autoHideDuration={4000}
+        onClose={() => setOpenMensaje(false)}
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+      >
+        <Alert
+          onClose={() => setOpenMensaje(false)}
+          severity={tipoMensaje}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {mensaje}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 }

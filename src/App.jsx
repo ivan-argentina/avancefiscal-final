@@ -1,6 +1,7 @@
 import InicioFactu from "./pages/InicioFactu";
 import CambiarPassword from "./pages/CambiarPassword";
 import Login from "./pages/Login";
+import Landing from "./landing/Landing";
 
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { Routes, Route } from "react-router-dom";
@@ -15,12 +16,17 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <Routes>
-        {/* Rutas públicas */}
-        <Route path="/" element={<Login />} />
+        {/* Login */}
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
 
+        {/* Landing (solo desarrollo por ahora) */}
+        <Route path="/landing" element={<Landing />} />
+
+        {/* Recuperar contraseña */}
         <Route path="/restablecer-password" element={<CambiarPassword />} />
 
-        {/* Sistema */}
+        {/* Todo el sistema */}
         <Route path="/*" element={<InicioFactu />} />
       </Routes>
     </ThemeProvider>

@@ -69,11 +69,6 @@ export default function Facturas() {
   const API_URL = import.meta.env.VITE_API_URL;
 
   const enviarFacturaEmail = async (factura) => {
-    console.log("Entró a enviarFacturaEmail");
-    console.log("Factura email:", factura);
-    console.log("Email cliente:", factura.clientes?.email);
-    console.log("API_URL:", API_URL);
-
     if (enviandoEmail) return;
 
     const emailCliente = factura.clientes?.email;
@@ -85,8 +80,6 @@ export default function Facturas() {
 
     try {
       setEnviandoEmail(true);
-
-      console.log("Llamando descargarPdfFactura en modo email");
 
       await descargarPdfFactura(factura, "email");
     } catch (error) {
@@ -199,7 +192,7 @@ export default function Facturas() {
   const cargarFacturas = async () => {
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     if (!usuarioGuardado?.id) {
-      console.log("No hay usuario logueado");
+      console.error("No hay usuario logueado");
       return;
     }
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
@@ -320,8 +313,6 @@ export default function Facturas() {
   };
 
   const descargarPdfFactura = async (factura, modo = "descargar") => {
-    console.log("Entró a descargarPdfFactura");
-    console.log("Modo recibido:", modo);
     try {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
