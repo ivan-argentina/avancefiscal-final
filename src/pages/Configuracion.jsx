@@ -28,7 +28,7 @@ export default function Configuracion() {
   const [tipo, setTipo] = useState("success");
   const [impresoras, setImpresoras] = useState([]);
   const [impresoraComandera, setImpresoraComandera] = useState("");
-
+  const [qzConectado, setQzConectado] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("success");
   const [openMensaje, setOpenMensaje] = useState(false);
@@ -120,15 +120,23 @@ export default function Configuracion() {
   const cargarImpresoras = async () => {
     try {
       configurarQz();
+
       if (!qz.websocket.isActive()) {
         await qz.websocket.connect();
       }
 
+      setQzConectado(true);
+
       const lista = await qz.printers.find();
 
       setImpresoras(lista || []);
+
+      console.log("Impresoras detectadas:", lista);
     } catch (error) {
       console.error("Error al detectar impresoras:", error);
+
+      setQzConectado(false);
+      setImpresoras([]);
     }
   };
 
@@ -268,6 +276,38 @@ export default function Configuracion() {
           </Box>
         </Grid>
       </Grid>
+      {/* ESTADO DE QZ TRAY */}
+      <Box
+        sx={{
+          mt: 2,
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+        }}
+      >
+        <Typography
+          variant="body2"
+          sx={{
+            fontWeight: 600,
+            color: qzConectado ? "success.main" : "error.main",
+          }}
+        >
+          {qzConectado ? "● QZ Tray conectado" : "● QZ Tray no detectado"}
+        </Typography>
+
+        {!qzConectado && (
+          <Button
+            variant="outlined"
+            size="small"
+            href="https://qz.io/download/?os=windows"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ textTransform: "none" }}
+          >
+            Descargar QZ Tray
+          </Button>
+        )}
+      </Box>
       <Snackbar
         open={openMensaje}
         autoHideDuration={4000}

@@ -132,11 +132,7 @@ app.post("/api/auth/login", async (req, res) => {
       !usuarioEncontrado.email ||
       !usuarioEncontrado.auth_user_id
     ) {
-      console.log("LOGIN 401 - usuario inválido o incompleto:", {
-    encontrado: !!usuarioEncontrado,
-    activo: usuarioEncontrado?.activo,
-    tieneEmail: !!usuarioEncontrado?.email,
-    tieneAuthUserId: !!usuarioEncontrado?.auth_user_id, });
+      
 
       return res.status(401).json({
         ok: false,
@@ -152,12 +148,7 @@ app.post("/api/auth/login", async (req, res) => {
         email: usuarioEncontrado.email.trim().toLowerCase(),
         password: passwordIngresada,
       });
-      console.log("Resultado Supabase Auth:", {
-  authError: authError?.message || null,
-  tieneSession: !!authData?.session,
-  tieneUser: !!authData?.user,
-  userId: authData?.user?.id || null,
-});
+   
 
     if (authError || !authData?.session || !authData?.user) {
       console.log(
