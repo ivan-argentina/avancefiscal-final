@@ -6,6 +6,7 @@ import {
   Typography,
   Link,
 } from "@mui/material";
+import { abrirWhatsAppDemo } from "../utils/whatsapp";
 
 export default function Footer() {
   const irA = (id) => {

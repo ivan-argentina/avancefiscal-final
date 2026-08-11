@@ -32,9 +32,13 @@ export default function Navbar() {
   return (
     <>
       <AppBar
-        position="fixed"
+        position="static"
         elevation={0}
         sx={{
+          position: {
+            xs: "static",
+            md: "fixed",
+          },
           background: "rgba(255,255,255,0.92)",
           backdropFilter: "blur(12px)",
           borderBottom: "1px solid rgba(226,232,240,0.8)",

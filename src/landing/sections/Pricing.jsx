@@ -178,8 +178,18 @@ export default function Pricing() {
                       / mes
                     </Typography>
                   </Stack>
-                </Box>
 
+                  <Typography
+                    sx={{
+                      mt: 1,
+                      color: "#64748b",
+                      fontSize: "0.9rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Precio final con IVA incluido
+                  </Typography>
+                </Box>
                 <Stack spacing={1}>
                   <Typography
                     sx={{
@@ -307,8 +317,8 @@ export default function Pricing() {
                       fontWeight: 700,
                     }}
                   >
-                    Sin permanencia · Actualizaciones incluidas · Sin costos
-                    ocultos
+                    Sin permanencia mínima · Actualizaciones incluidas · Sin
+                    costos ocultos
                   </Typography>
                 </Box>
               </Box>
