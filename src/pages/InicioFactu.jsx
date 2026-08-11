@@ -9,9 +9,13 @@ import {
   ListItemButton,
   ListItemText,
   ListItemIcon,
+  IconButton,
+  useMediaQuery,
+  useTheme,
 } from "@mui/material";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
+import MenuIcon from "@mui/icons-material/Menu";
 import AbmClientes from "./AbmClientes";
 import AbmCiudades from "./AbmCiudades";
 import AbmArticulos from "./AbmArticulos";
@@ -39,6 +43,10 @@ import { supabase } from "../hook/supabaseClient";
 const drawerWidth = 200;
 
 export default function InicioFactu() {
+  const theme = useTheme();
+  const esMobile = useMediaQuery(theme.breakpoints.down("md"));
+  const [menuMobileAbierto, setMenuMobileAbierto] = useState(false);
+
   const location = useLocation();
   const [openReportes, setOpenReportes] = useState(false);
   const [openResumen, setOpenResumen] = useState(false);
@@ -111,19 +119,39 @@ export default function InicioFactu() {
     }
   }, [location.pathname]);
 
+  // En celular, al navegar a otra pantalla cerramos automáticamente el menú.
+  useEffect(() => {
+    if (esMobile) {
+      setMenuMobileAbierto(false);
+    }
+  }, [location.pathname, esMobile]);
+
   const menuItems = [{ text: "Factura", path: "/factura" }];
 
   return (
-    <Box sx={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <Box sx={{ display: "flex", height: "100dvh", overflow: "hidden" }}>
       <Drawer
-        variant="permanent"
+        variant={esMobile ? "temporary" : "permanent"}
+        open={esMobile ? menuMobileAbierto : true}
+        onClose={() => setMenuMobileAbierto(false)}
+        ModalProps={{
+          keepMounted: true,
+        }}
         sx={{
           display: "flex",
           flexDirection: "column",
-          width: drawerWidth,
+          width: {
+            xs: 0,
+            md: drawerWidth,
+          },
           flexShrink: 0,
           "& .MuiDrawer-paper": {
-            width: drawerWidth,
+            width: {
+              xs: 280,
+              sm: 300,
+              md: drawerWidth,
+            },
+            maxWidth: "86vw",
             boxSizing: "border-box",
             background: "linear-gradient(180deg, #1976d2, #0d47a1)",
             color: "white",
@@ -591,18 +619,53 @@ export default function InicioFactu() {
         </Box>
       </Drawer>
 
-      {/* Contenido*/}
+      {/* Contenido */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          minWidth: 0,
+          p: {
+            xs: 1.5,
+            sm: 2,
+            md: 3,
+          },
           display: "flex",
           flexDirection: "column",
-          overflow: "hidden", // 👈 clave
+          overflow: "hidden",
         }}
       >
-        <Box sx={{ flexGrow: 1, minHeight: 0 }}>
+        {/* BOTÓN HAMBURGUESA SOLO EN CELULAR */}
+        {esMobile && (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "flex-start",
+              alignItems: "center",
+              mb: 1,
+              flexShrink: 0,
+            }}
+          >
+            <IconButton
+              onClick={() => setMenuMobileAbierto(true)}
+              aria-label="Abrir menú"
+              sx={{
+                width: 44,
+                height: 44,
+                bgcolor: "#1976d2",
+                color: "#ffffff",
+                boxShadow: 2,
+                "&:hover": {
+                  bgcolor: "#1565c0",
+                },
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
+          </Box>
+        )}
+
+        <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0 }}>
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
