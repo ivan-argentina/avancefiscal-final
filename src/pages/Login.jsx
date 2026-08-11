@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../hook/supabaseClient";
+import logoAvanceFiscal from "../assets/logo-avance-fiscal.png";
 
 import {
   Alert,
@@ -282,26 +283,20 @@ export default function Login() {
           borderColor: "divider",
         }}
       >
-        {/* LOGO PROVISORIO */}
+        {/* LOGO AVANCE FISCAL */}
         <Box
+          component="img"
+          src={logoAvanceFiscal}
+          alt="Avance Fiscal"
           sx={{
-            width: 68,
-            height: 68,
-            borderRadius: "20px",
-            bgcolor: "primary.main",
-            color: "primary.contrastText",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            width: 120,
+            height: 120,
+            objectFit: "contain",
+            display: "block",
             mx: "auto",
             mb: 2,
-            boxShadow: 3,
           }}
-        >
-          <Typography variant="h4" fontWeight="bold">
-            A
-          </Typography>
-        </Box>
+        />
 
         <Typography
           variant="h4"
