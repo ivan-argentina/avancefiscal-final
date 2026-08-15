@@ -378,11 +378,7 @@ const config = qz.configs.create(nombreImpresora, {
   copies: 1,
 });
   
-  const nombreFantasia =
-    empresa.nombre_fantasia ||
-    empresa.nombre ||
-    empresa.razon_social ||
-    "Avance Fiscal";
+  const nombreFantasia = String(empresa.nombre_fantasia ?? "").trim();
 
   const razonSocial =
     empresa.razon_social && empresa.razon_social !== nombreFantasia
@@ -468,9 +464,11 @@ const config = qz.configs.create(nombreImpresora, {
   /*
    * ENCABEZADO DE EMPRESA
    */
-  datosImpresion.push(comando(CMD_DOBLE_ALTO));
-  datosImpresion.push(texto(`${cortar(nombreFantasia)}\n`));
-  datosImpresion.push(comando(CMD_NORMAL));
+  if (nombreFantasia) {
+    datosImpresion.push(comando(CMD_DOBLE_ALTO));
+    datosImpresion.push(texto(`${cortar(nombreFantasia)}\n`));
+    datosImpresion.push(comando(CMD_NORMAL));
+  }
 
   if (razonSocial) {
     datosImpresion.push(texto(`${cortar(razonSocial)}\n`));

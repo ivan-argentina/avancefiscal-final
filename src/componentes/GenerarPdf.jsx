@@ -172,16 +172,18 @@ const GenerarPdf = forwardRef(
                 />
               )}
 
-              <Typography
-                sx={{
-                  fontSize: 28,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                  mb: 1,
-                }}
-              >
-                {empresa?.razon_social || "MI EMPRESA"}
-              </Typography>
+              {empresa?.nombre_fantasia?.trim() && (
+                <Typography
+                  sx={{
+                    fontSize: 28,
+                    fontWeight: 800,
+                    lineHeight: 1,
+                    mb: 1,
+                  }}
+                >
+                  {empresa.nombre_fantasia}
+                </Typography>
+              )}
 
               <Typography sx={{ fontSize: 13, mb: 0.3 }}>
                 <strong>Razón Social:</strong>{" "}

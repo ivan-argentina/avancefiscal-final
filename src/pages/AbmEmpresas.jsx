@@ -258,7 +258,7 @@ export default function AbmEmpresas() {
        */
       const payload = {
         razon_social: razonSocialLimpia,
-        nombre_fantasia: String(nombreFantacia || "").trim(),
+        nombre_fantasia: String(nombreFantacia ?? "").trim() || null,
         cuit: cuitLimpio,
         telefono: String(telefono || "").trim(),
         email: String(email || "").trim(),
@@ -845,6 +845,22 @@ export default function AbmEmpresas() {
           pageSizeOptions={[10, 20, 50, 100]}
         />
       </Paper>
+
+      <Snackbar
+        open={openMensaje}
+        autoHideDuration={4000}
+        onClose={() => setOpenMensaje(false)}
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setOpenMensaje(false)}
+          severity={tipoMensaje}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {mensaje}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
