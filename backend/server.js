@@ -685,6 +685,21 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       });
     }
 
+          // Protección: solamente facturas y notas de crédito
+      // pueden enviarse a ARCA.
+      const tiposFiscalesPermitidos = [
+        "factura",
+        "nota_de_credito",
+      ];
+
+      if (!tiposFiscalesPermitidos.includes(data.tipo_comprobante)) {
+        return res.status(400).json({
+          ok: false,
+          mensaje: "Este tipo de comprobante no se autoriza ante ARCA",
+          tipoComprobante: data.tipo_comprobante,
+        });
+      }
+
     if (data.estado_fiscal === "autorizada" && data.cae) {
       return res.json({
         ok: true,
