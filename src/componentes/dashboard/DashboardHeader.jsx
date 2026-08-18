@@ -16,7 +16,15 @@ const formatearFecha = () =>
     year: "numeric",
   });
 
-export default function DashboardHeader({ nombreUsuario = "Iván", empresa }) {
+export default function DashboardHeader({ nombreUsuario, empresa }) {
+  const usuarioGuardado = JSON.parse(localStorage.getItem("usuario") || "{}");
+
+  const nombreMostrar =
+    nombreUsuario ||
+    usuarioGuardado?.nombre ||
+    usuarioGuardado?.usuario ||
+    "Usuario";
+
   return (
     <Paper
       sx={{
@@ -32,7 +40,7 @@ export default function DashboardHeader({ nombreUsuario = "Iván", empresa }) {
     >
       <Box>
         <Typography variant="h5" fontWeight="bold">
-          {obtenerSaludo()}, {nombreUsuario} 👋
+          {obtenerSaludo()}, {nombreMostrar} 👋
         </Typography>
 
         <Typography variant="body2" color="text.secondary">

@@ -327,46 +327,7 @@ export default function Dashboard() {
       return;
     }
     try {
-      const usuario = JSON.parse(localStorage.getItem("usuario"));
-
-      if (!usuario?.id) return;
-
-      let cuitEmpresa = null;
-
-      /*
-       * SUPERUSUARIO:
-       * usa la empresa seleccionada en el selector.
-       */
-      const esSuperAdmin =
-        String(usuario?.rol_global || "")
-          .trim()
-          .toLowerCase() === "superadmin";
-
-      /*
-       * SUPERADMIN:
-       * usa la empresa seleccionada en el selector.
-       */
-      if (esSuperAdmin) {
-        const empresaActiva = JSON.parse(localStorage.getItem("empresaActiva"));
-
-        cuitEmpresa = empresaActiva?.cuit || null;
-      } else {
-        /*
-         * USUARIO NORMAL:
-         * usa su empresa asociada.
-         */
-        const { data: relacion, error } = await supabase
-          .from("usuario_empresa")
-          .select("empresas(cuit)")
-          .eq("idusuario", usuario.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (error) {
-          throw error;
-        }
-        cuitEmpresa = relacion?.empresas?.cuit || null;
-      }
+      const cuitEmpresa = empresa?.cuit || null;
 
       if (!cuitEmpresa) {
         console.warn("No se encontró el CUIT de la empresa activa");
@@ -402,7 +363,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!empresa?.id) return;
-
     cargarEstadoCertificado();
     cargarResumen();
     cargarMonotributo();
