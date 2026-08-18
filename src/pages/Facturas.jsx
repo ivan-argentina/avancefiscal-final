@@ -33,6 +33,7 @@ import {
   TextField,
   Snackbar,
   Alert,
+  MenuItem,
 } from "@mui/material";
 
 export default function Facturas() {
@@ -55,6 +56,7 @@ export default function Facturas() {
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("info");
   const [openMensaje, setOpenMensaje] = useState(false);
+  const [vistaComprobantes, setVistaComprobantes] = useState("fiscales");
 
   const mostrarNotificacion = (texto, tipo = "info") => {
     setMensaje(texto);
@@ -63,6 +65,11 @@ export default function Facturas() {
   };
   const crearNotaCredito = (factura) => {
     localStorage.setItem("notaCreditoOrigen", JSON.stringify(factura));
+
+    navigate("/factura");
+  };
+  const facturarPresupuesto = (presupuesto) => {
+    localStorage.setItem("presupuestoOrigen", JSON.stringify(presupuesto));
 
     navigate("/factura");
   };
@@ -95,6 +102,13 @@ export default function Facturas() {
   };
 
   const autorizarFacturaPendiente = async (factura) => {
+    if (factura.tipo_comprobante === "presupuesto") {
+      mostrarNotificacion(
+        "Los presupuestos no se autorizan ante ARCA",
+        "warning",
+      );
+      return;
+    }
     try {
       const response = await fetch(`${API_URL}/api/fiscal/autorizar`, {
         method: "POST",
@@ -209,12 +223,16 @@ export default function Facturas() {
     idcliente,
     idfactura_origen,
      numero_origen,
+     idpresupuesto_origen,
+estado_presupuesto,
     numero,
     fecha,
     tipo_comprobante,
     letra_comprobante,
     forma_pago,
+    medio_pago,
     observaciones,
+    validez_dias,
     subtotal,
     total,
     punto_venta,
@@ -255,6 +273,7 @@ export default function Facturas() {
       idarticulo,
       cantidad,
       precio,
+      descuento_porcentaje,
       subtotal,
       descripcion,
       articulos (
@@ -709,19 +728,12 @@ export default function Facturas() {
     }
 
     const procesarPdf = async () => {
-      console.log("Entró a procesarPdf");
-      console.log("pdfModo actual:", pdfModo);
-      console.log("pdfData:", pdfData);
-
       try {
         await new Promise((resolve) => {
           setTimeout(resolve, 300);
         });
 
         const pdfGenerado = await generarpdfU(facturaPdfRef.current, pdfNombre);
-
-        console.log("PDF generado:", pdfGenerado);
-        console.log("Tipo PDF:", pdfGenerado?.constructor?.name);
 
         if (!pdfGenerado?.pdfBase64) {
           throw new Error("El PDF fue generado sin contenido Base64");
@@ -748,10 +760,6 @@ export default function Facturas() {
             throw new Error("No se encontró el email del destinatario");
           }
 
-          console.log("Entró al bloque de envío por email");
-          console.log("Email pendiente:", emailPendiente);
-          console.log("Endpoint email:", `${API_URL}/api/email/factura`);
-
           const payload = {
             to: emailPendiente.to,
             subject: emailPendiente.subject,
@@ -773,8 +781,6 @@ export default function Facturas() {
             },
             body: JSON.stringify(payload),
           });
-
-          console.log("Estado respuesta email:", response.status);
 
           const textoRespuesta = await response.text();
 
@@ -877,10 +883,14 @@ export default function Facturas() {
     },
     {
       field: "estado_fiscal",
-      headerName: "Estado Fiscal",
+      headerName: "Estado",
       width: 150,
       renderCell: (params) => {
-        const estado = params.value || "pendiente";
+        const esPresupuesto = params.row.tipo_comprobante === "presupuesto";
+
+        const estado = esPresupuesto
+          ? params.row.estado_presupuesto || "pendiente"
+          : params.row.estado_fiscal || "pendiente";
 
         const config = {
           autorizada: {
@@ -894,6 +904,10 @@ export default function Facturas() {
           rechazada: {
             label: "Rechazada",
             color: "error",
+          },
+          facturado: {
+            label: "Facturado",
+            color: "success",
           },
         };
 
@@ -910,8 +924,14 @@ export default function Facturas() {
       headerName: "N° Fiscal",
       width: 160,
       renderCell: (params) => {
+        if (params.row.tipo_comprobante === "presupuesto") {
+          return "-";
+        }
+
         const ptoVta = String(params.row.punto_venta || 1).padStart(4, "0");
+
         const nro = String(params.value || 0).padStart(8, "0");
+
         return `${ptoVta}-${nro}`;
       },
     },
@@ -920,7 +940,14 @@ export default function Facturas() {
       headerName: "CAE",
       width: 160,
       renderCell: (params) => {
-        if (params.row.estado_fiscal !== "autorizada") return "-";
+        if (params.row.tipo_comprobante === "presupuesto") {
+          return "-";
+        }
+
+        if (params.row.estado_fiscal !== "autorizada") {
+          return "-";
+        }
+
         return params.value || "-";
       },
     },
@@ -929,6 +956,10 @@ export default function Facturas() {
       headerName: "Error AFIP",
       width: 100,
       renderCell: (params) => {
+        if (params.row.tipo_comprobante === "presupuesto") {
+          return "-";
+        }
+
         const code = params.row.afip_error_code;
         const msg = params.row.afip_error_msg;
         const estado = params.row.estado_fiscal;
@@ -979,7 +1010,12 @@ export default function Facturas() {
       headerName: "Vto. CAE",
       width: 120,
       renderCell: (params) => {
+        if (params.row.tipo_comprobante === "presupuesto") {
+          return "-";
+        }
+
         if (!params.value) return "-";
+
         const fecha = new Date(params.value);
         return fecha.toLocaleDateString("es-AR");
       },
@@ -988,48 +1024,83 @@ export default function Facturas() {
     {
       field: "pdf",
       headerName: "Acciones",
-      width: 170,
+      width: 260,
       sortable: false,
       filterable: false,
-      renderCell: (params) => (
-        <>
-          <Tooltip title="Descargar PDF">
-            <IconButton
-              color="secondary"
-              onClick={() => descargarPdfFactura(params.row)}
-            >
-              <PictureAsPdfIcon />
-            </IconButton>
-          </Tooltip>
+      renderCell: (params) => {
+        const esPresupuesto = params.row.tipo_comprobante === "presupuesto";
 
-          <Tooltip title="Enviar por WhatsApp">
-            <IconButton
-              color="success"
-              onClick={() => enviarWhatsAppFactura(params.row)}
+        return (
+          <>
+            <Tooltip
+              title={esPresupuesto ? "Reimprimir presupuesto" : "Descargar PDF"}
             >
-              <WhatsAppIcon />
-            </IconButton>
-          </Tooltip>
+              <IconButton
+                color="secondary"
+                onClick={() => descargarPdfFactura(params.row)}
+              >
+                <PictureAsPdfIcon />
+              </IconButton>
+            </Tooltip>
 
-          <Tooltip title="Generar Nota de Credito">
-            <IconButton
-              color="warning"
-              onClick={() => crearNotaCredito(params.row)}
-            >
-              <UndoIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Enviar por email">
-            <IconButton
-              color="primary"
-              disabled={enviandoEmail}
-              onClick={() => enviarFacturaEmail(params.row)}
-            >
-              <EmailIcon />
-            </IconButton>
-          </Tooltip>
-        </>
-      ),
+            <Tooltip title="Enviar por WhatsApp">
+              <IconButton
+                color="success"
+                onClick={() => enviarWhatsAppFactura(params.row)}
+              >
+                <WhatsAppIcon />
+              </IconButton>
+            </Tooltip>
+
+            {!esPresupuesto && (
+              <Tooltip title="Generar Nota de Crédito">
+                <IconButton
+                  color="warning"
+                  onClick={() => crearNotaCredito(params.row)}
+                >
+                  <UndoIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+
+            <Tooltip title="Enviar por email">
+              <IconButton
+                color="primary"
+                disabled={enviandoEmail}
+                onClick={() => enviarFacturaEmail(params.row)}
+              >
+                <EmailIcon />
+              </IconButton>
+            </Tooltip>
+
+            {esPresupuesto &&
+              (params.row.estado_presupuesto === "facturado" ? (
+                <Chip
+                  label="Facturado"
+                  color="success"
+                  size="small"
+                  sx={{
+                    ml: 1,
+                    fontWeight: 600,
+                  }}
+                />
+              ) : (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  onClick={() => facturarPresupuesto(params.row)}
+                  sx={{
+                    ml: 1,
+                    textTransform: "none",
+                  }}
+                >
+                  Facturar
+                </Button>
+              ))}
+          </>
+        );
+      },
     },
 
     {
@@ -1039,6 +1110,12 @@ export default function Facturas() {
       sortable: false,
       filterable: false,
       renderCell: (params) => {
+        const esPresupuesto = params.row.tipo_comprobante === "presupuesto";
+
+        if (esPresupuesto) {
+          return "-";
+        }
+
         if (params.row.estado_fiscal === "autorizada") {
           return "-";
         }
@@ -1059,22 +1136,55 @@ export default function Facturas() {
 
   const facturasFiltradas = facturas.filter((f) => {
     const nombreCliente = f.clientes?.nombre || "";
-    return nombreCliente.toLowerCase().includes(filtro.toLowerCase());
+
+    const coincideCliente = nombreCliente
+      .toLowerCase()
+      .includes(filtro.toLowerCase().trim());
+
+    const coincideTipo =
+      vistaComprobantes === "presupuestos"
+        ? f.tipo_comprobante === "presupuesto"
+        : ["factura", "nota_de_credito"].includes(f.tipo_comprobante);
+
+    return coincideCliente && coincideTipo;
   });
 
   return (
     <Box sx={{ p: 2 }}>
       <Paper sx={{ p: 2, borderRadius: 3, width: "100%" }}>
         <Typography variant="h5" gutterBottom>
-          Listado de Facturas
+          {vistaComprobantes === "presupuestos"
+            ? "Listado de Presupuestos"
+            : "Listado de Facturas"}
         </Typography>
 
-        <Box sx={{ mb: 2 }}>
+        <Box
+          sx={{
+            mb: 2,
+            display: "flex",
+            gap: 2,
+            flexWrap: "wrap",
+          }}
+        >
+          <TextField
+            select
+            label="Ver comprobantes"
+            size="small"
+            value={vistaComprobantes}
+            onChange={(e) => setVistaComprobantes(e.target.value)}
+            sx={{ minWidth: 240 }}
+          >
+            <MenuItem value="fiscales">Facturas y notas de crédito</MenuItem>
+
+            <MenuItem value="presupuestos">Presupuestos</MenuItem>
+          </TextField>
+
           <TextField
             label="Buscar por cliente"
             size="small"
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
+            sx={{ minWidth: 240 }}
           />
         </Box>
 
@@ -1205,19 +1315,4 @@ export default function Facturas() {
       )}
     </Box>
   );
-  <Snackbar
-    open={openMensaje}
-    autoHideDuration={5000}
-    onClose={() => setOpenMensaje(false)}
-    anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
-  >
-    <Alert
-      severity={tipoMensaje}
-      onClose={() => setOpenMensaje(false)}
-      variant="filled"
-      sx={{ width: "100%" }}
-    >
-      {mensaje}
-    </Alert>
-  </Snackbar>;
 }

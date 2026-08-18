@@ -27,6 +27,7 @@ const GenerarPdf = forwardRef(
       clienteSeleccionado,
       detalle = [],
       observaciones,
+      validezDias,
       totalFactura,
       neto,
       iva,
@@ -36,6 +37,20 @@ const GenerarPdf = forwardRef(
     },
     ref,
   ) => {
+    const esPresupuesto = tipoComprobante === "presupuesto";
+
+    const subtotalSinDescuento = detalle.reduce(
+      (total, item) =>
+        total + Number(item.cantidad || 0) * Number(item.precio || 0),
+      0,
+    );
+
+    const descuentoTotalCalculado = Math.max(
+      0,
+      subtotalSinDescuento - Number(totalFactura || 0),
+    );
+
+    const descuentoTotal = subtotalSinDescuento - Number(totalFactura || 0);
     const formatearFecha = (fechaValor) => {
       if (!fechaValor) return "-";
 
@@ -150,7 +165,7 @@ const GenerarPdf = forwardRef(
           <Box
             sx={{
               display: "grid",
-              gridTemplateColumns: "1fr 90px 1fr",
+              gridTemplateColumns: esPresupuesto ? "1fr 1fr" : "1fr 90px 1fr",
               alignItems: "stretch",
               border: "1.5px solid #000",
               mb: 2,
@@ -216,61 +231,65 @@ const GenerarPdf = forwardRef(
               </Typography>
             </Box>
 
-            <Box
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                p: 1,
-              }}
-            >
+            {/* LETRA Y CÓDIGO - SOLO COMPROBANTES FISCALES */}
+            {!esPresupuesto && (
               <Box
                 sx={{
-                  width: 70,
-                  height: 70,
-                  border: "1.5px solid #000",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  mb: 1,
+                  p: 1,
                 }}
               >
+                <Box
+                  sx={{
+                    width: 70,
+                    height: 70,
+                    border: "1.5px solid #000",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    mb: 1,
+                  }}
+                >
+                  <Typography
+                    sx={{
+                      fontSize: 34,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      width: "100%",
+                      textAlign: "center",
+                    }}
+                  >
+                    {letraComprobante || "X"}
+                  </Typography>
+                </Box>
+
                 <Typography
                   sx={{
-                    fontSize: 34,
-                    fontWeight: 800,
-                    lineHeight: 1,
-                    width: "100%",
+                    fontSize: 11,
+                    fontWeight: 700,
                     textAlign: "center",
                   }}
                 >
-                  {letraComprobante || "X"}
+                  COD.{" "}
+                  {tipoComprobante === "nota_de_credito"
+                    ? letraComprobante === "C"
+                      ? "013"
+                      : letraComprobante === "B"
+                        ? "008"
+                        : "003"
+                    : letraComprobante === "C"
+                      ? "011"
+                      : letraComprobante === "B"
+                        ? "006"
+                        : "001"}
                 </Typography>
               </Box>
+            )}
 
-              <Typography
-                sx={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  textAlign: "center",
-                }}
-              >
-                COD.{" "}
-                {tipoComprobante === "nota_de_credito"
-                  ? letraComprobante === "C"
-                    ? "013"
-                    : letraComprobante === "B"
-                      ? "008"
-                      : "003"
-                  : letraComprobante === "C"
-                    ? "011"
-                    : letraComprobante === "B"
-                      ? "006"
-                      : "001"}
-              </Typography>
-            </Box>
-
+            {/* DATOS DEL COMPROBANTE */}
             <Box
               sx={{
                 p: 2,
@@ -290,29 +309,61 @@ const GenerarPdf = forwardRef(
                 {formatearTipo(tipoComprobante)}
               </Typography>
 
-              <Typography sx={{ fontSize: 13, mb: 0.6 }}>
-                <strong>Punto de Venta:</strong>{" "}
-                {String(puntoVenta || 1).padStart(4, "0")}
-              </Typography>
+              {esPresupuesto ? (
+                <>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Nro. Presupuesto:</strong>{" "}
+                    {String(numeroFactura || "").padStart(8, "0")}
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, mb: 0.6 }}>
-                <strong>Comp. Nro:</strong>{" "}
-                {formatearNumeroFactura(puntoVenta, numeroFactura)}
-              </Typography>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Fecha de Emisión:</strong> {formatearFecha(fecha)}
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, mb: 0.6 }}>
-                <strong>Fecha de Emisión:</strong> {formatearFecha(fecha)}
-              </Typography>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Validez:</strong> {validezDias || 15} días
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, mb: 0.6 }}>
-                <strong>CUIT:</strong>{" "}
-                {empresa?.cuit ? formatearCuit(empresa.cuit) : "-"}
-              </Typography>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Forma de Pago:</strong> {formaPago || "-"}
+                  </Typography>
+                </>
+              ) : (
+                <>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Punto de Venta:</strong>{" "}
+                    {String(puntoVenta || 1).padStart(4, "0")}
+                  </Typography>
 
-              <Typography sx={{ fontSize: 13, mb: 0.6 }}>
-                <strong>Forma de Pago:</strong> {formaPago || "-"}
-              </Typography>
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Comp. Nro:</strong>{" "}
+                    {formatearNumeroFactura(puntoVenta, numeroFactura)}
+                  </Typography>
+
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Fecha de Emisión:</strong> {formatearFecha(fecha)}
+                  </Typography>
+
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>CUIT:</strong>{" "}
+                    {empresa?.cuit ? formatearCuit(empresa.cuit) : "-"}
+                  </Typography>
+
+                  <Typography sx={{ fontSize: 13, mb: 0.6 }}>
+                    <strong>Forma de Pago:</strong> {formaPago || "-"}
+                  </Typography>
+                </>
+              )}
             </Box>
+
+            <Box
+              sx={{
+                p: 2,
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "flex-start",
+              }}
+            ></Box>
           </Box>
 
           <Box
@@ -393,45 +444,58 @@ const GenerarPdf = forwardRef(
                 <TableCell>Producto / Servicio</TableCell>
                 <TableCell align="right">Cantidad</TableCell>
                 <TableCell align="right">Precio Unit.</TableCell>
+                <TableCell align="right">Descuento</TableCell>
                 <TableCell align="right">Subtotal</TableCell>
               </TableRow>
             </TableHead>
 
             <TableBody>
-              {detalle.map((item, index) => (
-                <TableRow key={item.id || index}>
-                  <TableCell>
-                    {item.articulos?.descripcion ||
-                      item.nombre ||
-                      item.descripcion ||
-                      item.articulo ||
-                      "-"}
-                  </TableCell>
+              {detalle.map((item, index) => {
+                const cantidad = Number(item.cantidad || 0);
+                const precio = Number(item.precio || 0);
+                const porcentaje = Number(item.descuento_porcentaje || 0);
 
-                  <TableCell align="right">
-                    {Number(item.cantidad || 0)}
-                  </TableCell>
+                const bruto = cantidad * precio;
+                const importeDescuento = bruto * (porcentaje / 100);
 
-                  <TableCell align="right">
-                    $ {formatoMoneda(item.precio)}
-                  </TableCell>
+                return (
+                  <TableRow key={item.id || index}>
+                    <TableCell>
+                      {item.articulos?.descripcion ||
+                        item.nombre ||
+                        item.descripcion ||
+                        item.articulo ||
+                        "-"}
+                    </TableCell>
 
-                  <TableCell align="right">
-                    $ {formatoMoneda(item.subtotal)}
-                  </TableCell>
-                </TableRow>
-              ))}
+                    <TableCell align="right">{cantidad}</TableCell>
+
+                    <TableCell align="right">
+                      $ {formatoMoneda(precio)}
+                    </TableCell>
+
+                    <TableCell align="right">
+                      {porcentaje > 0
+                        ? `${porcentaje}% / $ ${formatoMoneda(importeDescuento)}`
+                        : "0% / $ 0"}
+                    </TableCell>
+
+                    <TableCell align="right">
+                      $ {formatoMoneda(item.subtotal)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
 
               {detalle.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} align="center">
+                  <TableCell colSpan={5} align="center">
                     Sin artículos cargados
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-
           <TableContainer />
 
           <Box sx={{ flexGrow: 1 }} />
@@ -449,7 +513,8 @@ const GenerarPdf = forwardRef(
           >
             <Box
               sx={{
-                flex: 1,
+                flex: "1 1 auto",
+                minWidth: 0,
                 p: 1.2,
                 borderRight: "1.5px solid #000",
               }}
@@ -458,7 +523,8 @@ const GenerarPdf = forwardRef(
                 Observaciones
               </Typography>
 
-              {tipoComprobante === "factura" && (
+              {(tipoComprobante === "factura" ||
+                tipoComprobante === "presupuesto") && (
                 <Typography sx={{ fontSize: 12, whiteSpace: "pre-line" }}>
                   {observaciones}
                 </Typography>
@@ -475,7 +541,7 @@ const GenerarPdf = forwardRef(
 
             <Box
               sx={{
-                width: 340,
+                flex: "0 0 240px",
                 p: 1.2,
                 boxSizing: "border-box",
                 display: "flex",
@@ -483,37 +549,124 @@ const GenerarPdf = forwardRef(
                 justifyContent: "center",
               }}
             >
-              {esFacturaC ? (
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    p: 0.8,
-                    borderBottom: "1px solid #000",
-                  }}
-                >
-                  <Typography
+              {esPresupuesto ? (
+                <>
+                  {/* PRESUPUESTO */}
+                  <Box
                     sx={{
-                      fontSize: 12.5,
-                      fontWeight: 600,
-                      flex: 1,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
                     }}
                   >
-                    Subtotal:
-                  </Typography>
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                      Subtotal:
+                    </Typography>
 
-                  <Typography
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(subtotalSinDescuento)}
+                    </Typography>
+                  </Box>
+
+                  <Box
                     sx={{
-                      fontSize: 12.5,
-                      minWidth: 110,
-                      textAlign: "right",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
                     }}
                   >
-                    $ {formatoMoneda(totalFactura)}
-                  </Typography>
-                </Box>
+                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                      Descuento:
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(descuentoTotal)}
+                    </Typography>
+                  </Box>
+                </>
+              ) : esFacturaC ? (
+                /* FACTURA C - MONOTRIBUTO */
+                <>
+                  {/* SUBTOTAL SIN DESCUENTOS */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        flex: 1,
+                      }}
+                    >
+                      Subtotal:
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(subtotalSinDescuento)}
+                    </Typography>
+                  </Box>
+
+                  {/* DESCUENTO TOTAL */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      p: 0.8,
+                      borderBottom: "1px solid #000",
+                    }}
+                  >
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        flex: 1,
+                      }}
+                    >
+                      Descuento:
+                    </Typography>
+
+                    <Typography
+                      sx={{
+                        fontSize: 12.5,
+                        minWidth: 110,
+                        textAlign: "right",
+                      }}
+                    >
+                      $ {formatoMoneda(descuentoTotalCalculado)}
+                    </Typography>
+                  </Box>
+                </>
               ) : (
+                /* FACTURA A / B */
                 <>
                   <Box
                     sx={{
@@ -588,7 +741,7 @@ const GenerarPdf = forwardRef(
                   </Box>
                 </>
               )}
-
+              {/* TOTAL FINAL */}
               <Box
                 sx={{
                   display: "flex",
@@ -599,7 +752,7 @@ const GenerarPdf = forwardRef(
                 }}
               >
                 <Typography sx={{ fontSize: 14, fontWeight: 800, flex: 1 }}>
-                  IMPORTE TOTAL
+                  {esPresupuesto ? "TOTAL PRESUPUESTO" : "IMPORTE TOTAL"}
                 </Typography>
 
                 <Typography
@@ -616,53 +769,57 @@ const GenerarPdf = forwardRef(
             </Box>
           </Box>
 
-          <Box
-            sx={{
-              border: "1.5px solid #000",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              p: 1.5,
-              mb: 4,
-            }}
-          >
-            <Box>
-              <Typography sx={{ fontSize: 15, fontWeight: 800, mb: 1 }}>
-                <strong>CAE N°:</strong> {cae}
-              </Typography>
-
-              <Typography sx={{ fontSize: 12.5 }}>
-                <strong>Fecha de Vto. de CAE:</strong>{" "}
-                {formatearFechaAfip(vencimientoCae)}
-              </Typography>
-            </Box>
-
+          {!esPresupuesto && (
             <Box
               sx={{
-                width: 120,
-                height: 120,
-                border: "1px solid #000",
+                border: "1.5px solid #000",
                 display: "flex",
+                justifyContent: "space-between",
                 alignItems: "center",
-                justifyContent: "center",
-                p: 1,
+                p: 1.5,
+                mb: 4,
               }}
             >
-              {qrAfip ? (
-                <img
-                  src={qrAfip}
-                  alt="QR AFIP"
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "contain",
+              <>
+                <Box>
+                  <Typography sx={{ fontSize: 15, fontWeight: 800, mb: 1 }}>
+                    <strong>CAE N°:</strong> {cae}
+                  </Typography>
+
+                  <Typography sx={{ fontSize: 12.5 }}>
+                    <strong>Fecha de Vto. de CAE:</strong>{" "}
+                    {formatearFechaAfip(vencimientoCae)}
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    width: 120,
+                    height: 120,
+                    border: "1px solid #000",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    p: 1,
                   }}
-                />
-              ) : (
-                "QR"
-              )}
+                >
+                  {qrAfip ? (
+                    <img
+                      src={qrAfip}
+                      alt="QR AFIP"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                      }}
+                    />
+                  ) : (
+                    "QR"
+                  )}
+                </Box>
+              </>
             </Box>
-          </Box>
+          )}
         </Paper>
       </Box>
     );

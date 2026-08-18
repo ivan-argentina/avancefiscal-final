@@ -73,6 +73,7 @@ export default function Login() {
 
     if (!usuarioBuscado || !passwordIngresada) {
       mostrarNotificacion("Ingresá el usuario y la contraseña.", "warning");
+      setPassword("");
       return;
     }
 
@@ -182,6 +183,7 @@ export default function Login() {
 
       mostrarNotificacion(mensajeError, "error");
     } finally {
+      setPassword("");
       setIngresando(false);
     }
   };
@@ -336,71 +338,73 @@ export default function Login() {
           Ingresá tus datos para acceder al sistema
         </Typography>
 
-        <TextField
-          label="Usuario"
-          fullWidth
-          size="small"
-          value={usuarioLogin}
-          disabled={ingresando}
-          autoComplete="username"
-          autoFocus
-          onChange={(e) => setUsuarioLogin(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              passwordRef.current?.focus();
-            }
-          }}
-          slotProps={{
-            input: {},
-          }}
-        />
+        <form autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+          <TextField
+            label="Usuario"
+            fullWidth
+            size="small"
+            value={usuarioLogin}
+            disabled={ingresando}
+            autoComplete="off"
+            autoFocus
+            onChange={(e) => setUsuarioLogin(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                passwordRef.current?.focus();
+              }
+            }}
+            slotProps={{
+              input: {},
+            }}
+          />
 
-        <TextField
-          label="Contraseña"
-          type={mostrarPassword ? "text" : "password"}
-          fullWidth
-          size="small"
-          value={password}
-          disabled={ingresando}
-          autoComplete="current-password"
-          sx={{ mt: 2 }}
-          inputRef={passwordRef}
-          onChange={(e) => setPassword(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !ingresando) {
-              e.preventDefault();
-              ingresar();
-            }
-          }}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <LockOutlinedIcon fontSize="small" color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={() => setMostrarPassword((anterior) => !anterior)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    edge="end"
-                    size="small"
-                    disabled={ingresando}
-                    aria-label={
-                      mostrarPassword
-                        ? "Ocultar contraseña"
-                        : "Mostrar contraseña"
-                    }
-                  >
-                    {mostrarPassword ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
-        />
+          <TextField
+            label="Contraseña"
+            type={mostrarPassword ? "text" : "password"}
+            fullWidth
+            size="small"
+            value={password}
+            disabled={ingresando}
+            autoComplete="new-password"
+            sx={{ mt: 2 }}
+            inputRef={passwordRef}
+            onChange={(e) => setPassword(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !ingresando) {
+                e.preventDefault();
+                ingresar();
+              }
+            }}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockOutlinedIcon fontSize="small" color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setMostrarPassword((anterior) => !anterior)}
+                      onMouseDown={(e) => e.preventDefault()}
+                      edge="end"
+                      size="small"
+                      disabled={ingresando}
+                      aria-label={
+                        mostrarPassword
+                          ? "Ocultar contraseña"
+                          : "Mostrar contraseña"
+                      }
+                    >
+                      {mostrarPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
+        </form>
 
         <Box
           sx={{
