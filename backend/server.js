@@ -649,10 +649,6 @@ const formatearFechaAfip = (fechaAfip) => {
   return `${anio}-${mes}-${dia}`;
 };
 
-const cae = detalleAfip.CAE;
-const caeVto = formatearFechaAfip(detalleAfip.CAEFchVto);
-const numeroFiscal = detalleAfip.CbteDesde;
-
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
     const { idFactura } = req.body;
@@ -783,15 +779,10 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
         resultadoAfip,
       });
     }
-    const calcularVencimientoCae = () => {
-      const fecha = new Date();
-      fecha.setDate(fecha.getDate() + 10);
-      return fecha.toISOString().slice(0, 10);
-    };
     const cae = detalleAfip.CAE;
-    const caeVtoAfip = detalleAfip.CAEFchVto;
-    const caeVto = calcularVencimientoCae();
+    const caeVto = formatearFechaAfip(detalleAfip.CAEFchVto);
     const numeroFiscal = detalleAfip.CbteDesde;
+
     const { error: updateError } = await supabase
       .from("facturas")
       .update({
