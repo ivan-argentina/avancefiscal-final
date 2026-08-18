@@ -132,8 +132,6 @@ app.post("/api/auth/login", async (req, res) => {
       !usuarioEncontrado.email ||
       !usuarioEncontrado.auth_user_id
     ) {
-      
-
       return res.status(401).json({
         ok: false,
         error: "Usuario o contraseña incorrectos.",
@@ -148,13 +146,9 @@ app.post("/api/auth/login", async (req, res) => {
         email: usuarioEncontrado.email.trim().toLowerCase(),
         password: passwordIngresada,
       });
-   
 
     if (authError || !authData?.session || !authData?.user) {
-      console.log(
-    "LOGIN 401 - fallo signInWithPassword:",
-    authError?.message,
-  );
+      console.log("LOGIN 401 - fallo signInWithPassword:", authError?.message);
       return res.status(401).json({
         ok: false,
         error: "Usuario o contraseña incorrectos.",
@@ -166,10 +160,10 @@ app.post("/api/auth/login", async (req, res) => {
      * el que está vinculado en nuestra tabla usuarios.
      */
     if (authData.user.id !== usuarioEncontrado.auth_user_id) {
-       console.log("LOGIN 401 - auth_user_id distinto:", {
-    authId: authData.user.id,
-    tablaAuthId: usuarioEncontrado.auth_user_id,
-  });
+      console.log("LOGIN 401 - auth_user_id distinto:", {
+        authId: authData.user.id,
+        tablaAuthId: usuarioEncontrado.auth_user_id,
+      });
       return res.status(401).json({
         ok: false,
         error: "La cuenta no está correctamente vinculada.",
@@ -642,14 +636,22 @@ app.get("/api/fiscal/ultimo", async (req, res) => {
 });
 
 const formatearFechaAfip = (fechaAfip) => {
-  if (!fechaAfip) return null;
+  const valor = String(fechaAfip || "").replace(/\D/g, "");
 
-  const texto = String(fechaAfip);
+  if (valor.length !== 8) {
+    return null;
+  }
 
-  if (texto.length !== 8) return null;
+  const anio = valor.slice(0, 4);
+  const mes = valor.slice(4, 6);
+  const dia = valor.slice(6, 8);
 
-  return `${texto.substring(0, 4)}-${texto.substring(4, 6)}-${texto.substring(6, 8)}`;
+  return `${anio}-${mes}-${dia}`;
 };
+
+const cae = detalleAfip.CAE;
+const caeVto = formatearFechaAfip(detalleAfip.CAEFchVto);
+const numeroFiscal = detalleAfip.CbteDesde;
 
 app.post("/api/fiscal/autorizar", async (req, res) => {
   try {
@@ -685,20 +687,17 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
       });
     }
 
-          // Protección: solamente facturas y notas de crédito
-      // pueden enviarse a ARCA.
-      const tiposFiscalesPermitidos = [
-        "factura",
-        "nota_de_credito",
-      ];
+    // Protección: solamente facturas y notas de crédito
+    // pueden enviarse a ARCA.
+    const tiposFiscalesPermitidos = ["factura", "nota_de_credito"];
 
-      if (!tiposFiscalesPermitidos.includes(data.tipo_comprobante)) {
-        return res.status(400).json({
-          ok: false,
-          mensaje: "Este tipo de comprobante no se autoriza ante ARCA",
-          tipoComprobante: data.tipo_comprobante,
-        });
-      }
+    if (!tiposFiscalesPermitidos.includes(data.tipo_comprobante)) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: "Este tipo de comprobante no se autoriza ante ARCA",
+        tipoComprobante: data.tipo_comprobante,
+      });
+    }
 
     if (data.estado_fiscal === "autorizada" && data.cae) {
       return res.json({
@@ -1711,10 +1710,7 @@ app.post("/api/qz/sign", (req, res) => {
     signer.update(request);
     signer.end();
 
-    const signature = signer.sign(
-      claveFormateada,
-      "base64",
-    );
+    const signature = signer.sign(claveFormateada, "base64");
 
     res.type("text/plain").send(signature);
   } catch (error) {
