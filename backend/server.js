@@ -749,36 +749,54 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
 
     const detalleAfip = resultadoAfip?.FeDetResp?.FECAEDetResponse?.[0];
 
-    const tipoComprobante = fiscal.comprobante.tipo_comprobante;
-    const letraComprobante = fiscal.comprobante.letra;
+if (!detalleAfip || detalleAfip.Resultado !== "A") {
+  const erroresGenerales = resultadoAfip?.Errors?.Err || [];
+  const observaciones = detalleAfip?.Observaciones?.Obs || [];
 
-    if (!detalleAfip || detalleAfip.Resultado !== "A") {
-      const obs = detalleAfip?.Observaciones?.Obs || [];
+  const listaErrores = [
+    ...(Array.isArray(erroresGenerales)
+      ? erroresGenerales
+      : [erroresGenerales]),
+    ...(Array.isArray(observaciones)
+      ? observaciones
+      : [observaciones]),
+  ].filter(Boolean);
 
-      const primerError = Array.isArray(obs) ? obs[0] : obs;
+  const primerError = listaErrores[0];
 
-      const afipErrorCode = primerError?.Code ? String(primerError.Code) : "";
-      const afipErrorMsg = primerError?.Msg || "AFIP rechazó el comprobante";
+  const afipErrorCode = primerError?.Code
+    ? String(primerError.Code)
+    : "";
 
-      await supabase
-        .from("facturas")
-        .update({
-          estado_fiscal: "rechazada",
-          afip_error_code: afipErrorCode,
-          afip_error_msg: afipErrorMsg,
-        })
-        .eq("id", idFactura);
+  const afipErrorMsg =
+    primerError?.Msg || "ARCA rechazó el comprobante";
 
-      return res.status(400).json({
-        ok: false,
-        mensaje: "AFIP rechazó la factura",
-        errorAfip: {
-          code: afipErrorCode,
-          msg: afipErrorMsg,
-        },
-        resultadoAfip,
-      });
-    }
+  const esErrorTransitorio = ["500", "501", "502"].includes(
+    afipErrorCode,
+  );
+
+  await supabase
+    .from("facturas")
+    .update({
+      estado_fiscal: esErrorTransitorio ? "pendiente" : "rechazada",
+      afip_error_code: afipErrorCode,
+      afip_error_msg: afipErrorMsg,
+    })
+    .eq("id", idFactura);
+
+  return res.status(esErrorTransitorio ? 503 : 400).json({
+    ok: false,
+    mensaje: esErrorTransitorio
+      ? "ARCA presenta un inconveniente temporal. Intente nuevamente más tarde."
+      : "ARCA rechazó la factura",
+    errorAfip: {
+      code: afipErrorCode,
+      msg: afipErrorMsg,
+    },
+    resultadoAfip,
+  });
+}
+    
     const cae = detalleAfip.CAE;
     const caeVto = formatearFechaAfip(detalleAfip.CAEFchVto);
     const numeroFiscal = detalleAfip.CbteDesde;
