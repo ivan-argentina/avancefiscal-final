@@ -810,6 +810,8 @@ if (!detalleAfip || detalleAfip.Resultado !== "A") {
         punto_venta: puntoVenta,
         estado_fiscal: "autorizada",
         letra_comprobante: fiscal.comprobante.letra,
+        afip_error_code: null,
+        afip_error_msg: null,
       })
       .eq("id", idFactura);
 
