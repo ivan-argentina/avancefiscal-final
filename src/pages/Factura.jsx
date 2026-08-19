@@ -520,15 +520,23 @@ export default function Factura() {
 
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
       const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
-      const { data: empresa } = await supabase
+      const { data: empresaNumeracion, error: errorNumeracion } = await supabase
         .from("empresas")
         .select("proximo_remito, proximo_presupuesto")
         .eq("id", idEmpresa)
         .single();
 
-      const numeroRemito = empresa.proximo_remito;
-      const numeroPresupuesto = Number(empresa?.proximo_presupuesto || 1);
+      if (errorNumeracion || !empresaNumeracion) {
+        console.error("Error al obtener numeración:", errorEmpresa);
+        mostrarNotificacion(
+          "No se pudo obtener la numeración de la empresa",
+          "error",
+        );
+        return;
+      }
+
+      const numeroRemito = Number(empresa.proximo_remito || 1);
+      const numeroPresupuesto = Number(empresa.proximo_presupuesto || 1);
       const numeroComprobante =
         tipoComprobante === "presupuesto" ? numeroPresupuesto : numeroRemito;
       if (

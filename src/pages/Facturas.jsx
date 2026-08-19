@@ -15,6 +15,7 @@ import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import Tooltip from "@mui/material/Tooltip";
 import { imprimirTicketFactura } from "../utils/imprimirTicketFactura";
 import { API_URL } from "../config";
+import Notificaciones from "./Notificaciones";
 
 import {
   Box,
@@ -57,12 +58,19 @@ export default function Facturas() {
   const [tipoMensaje, setTipoMensaje] = useState("info");
   const [openMensaje, setOpenMensaje] = useState(false);
   const [vistaComprobantes, setVistaComprobantes] = useState("fiscales");
-
-  const mostrarNotificacion = (texto, tipo = "info") => {
-    setMensaje(texto);
-    setTipoMensaje(tipo);
-    setOpenMensaje(true);
+  const [notificacion, setNotificacion] = useState({
+    open: false,
+    mensaje: "",
+    tipo: "success",
+  });
+  const mostrarNotificacion = (mensaje, tipo = "success") => {
+    setNotificacion({
+      open: true,
+      mensaje,
+      tipo,
+    });
   };
+
   const crearNotaCredito = (factura) => {
     localStorage.setItem("notaCreditoOrigen", JSON.stringify(factura));
 
@@ -144,13 +152,15 @@ export default function Facturas() {
   };
 
   const enviarWhatsAppFactura = async (factura) => {
+    console.log("Entro a enviar por whtswapp:", factura);
     let telefono = String(factura.clientes?.telefono || "").replace(/\D/g, "");
 
     if (!telefono) {
+      console.warn("El cliente no tiene teléfono cargado");
       mostrarNotificacion("El cliente no tiene teléfono cargado", "warning");
       return;
     }
-
+    console.log("Teléfono recibido:", factura.clientes?.telefono);
     if (telefono.startsWith("54")) {
       telefono = telefono.slice(2);
     }
@@ -174,6 +184,7 @@ export default function Facturas() {
       `El PDF fue descargado para que puedas adjuntarlo.`;
 
     const ventanaWhatsApp = window.open("", "_blank");
+    console.log("Ventana WhatsApp:", ventanaWhatsApp);
 
     if (!ventanaWhatsApp) {
       mostrarNotificacion(
@@ -194,6 +205,7 @@ export default function Facturas() {
       });
 
       await descargarPdfFactura(factura, "whatsapp");
+      console.log("Preparando PDF para WhatsApp:", urlWhatsApp);
     } catch (error) {
       ventanaWhatsApp.close();
 
@@ -1313,6 +1325,17 @@ estado_presupuesto,
           numeroOrigen={pdfData.numeroOrigen}
         />
       )}
+      <Notificaciones
+        open={notificacion.open}
+        mensaje={notificacion.mensaje}
+        tipo={notificacion.tipo}
+        onClose={() =>
+          setNotificacion((prev) => ({
+            ...prev,
+            open: false,
+          }))
+        }
+      />
     </Box>
   );
 }
