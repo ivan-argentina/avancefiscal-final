@@ -235,6 +235,9 @@ export default function Factura() {
     const texto = String(valor || "")
       .trim()
       .toLowerCase();
+    console.log("VALOR RECIBIDO:", valor);
+    console.log("TEXTO BUSCADO:", texto);
+    console.log("LARGO:", texto.length);
 
     if (!texto) return null;
 
@@ -323,6 +326,12 @@ export default function Factura() {
       console.error("Error al cargar artículos:", error);
       return;
     }
+    console.log("FACTURA - TOTAL ARTICULOS:", data?.length);
+
+    console.log(
+      "FACTURA - ARTICULO BUSCADO:",
+      data?.find((a) => String(a.codigo || "").trim() === "7792422000043"),
+    );
 
     setArticulos(data || []);
   };
