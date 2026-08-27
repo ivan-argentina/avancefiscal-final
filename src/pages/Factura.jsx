@@ -3,6 +3,7 @@ import { supabase } from "../hook/supabaseClient";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import QRCode from "qrcode";
 import CircularProgress from "@mui/material/CircularProgress";
+import EditIcon from "@mui/icons-material/Edit";
 import {
   Grid,
   MenuItem,
@@ -13,6 +14,10 @@ import {
   IconButton,
   Paper,
   Autocomplete,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 
 import { DataGrid } from "@mui/x-data-grid";
@@ -66,6 +71,9 @@ export default function Factura() {
   const [mensaje, setMensaje] = useState("");
   const [tipo, setTipo] = useState("success");
   const [open, setOpen] = useState(false);
+  const [dialogEditarDescripcion, setDialogEditarDescripcion] = useState(false);
+  const [itemEditando, setItemEditando] = useState(null);
+  const [descripcionEditada, setDescripcionEditada] = useState("");
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     titulo: "",
@@ -231,20 +239,19 @@ export default function Factura() {
     setCantidad(1);
   };
 
-  const buscarPorCodigoODescripcion = (valor) => {
+  const buscarPorCodigoODescripcion = async (valor) => {
     const texto = String(valor || "")
       .trim()
       .toLowerCase();
-    console.log("VALOR RECIBIDO:", valor);
-    console.log("TEXTO BUSCADO:", texto);
-    console.log("LARGO:", texto.length);
 
     if (!texto) return null;
 
-    const encontrado = articulos.find((a) => {
+    // Primero busca entre los artículos ya cargados
+    const encontradoLocal = articulos.find((a) => {
       const codigo = String(a.codigo || "")
         .trim()
         .toLowerCase();
+
       const descripcion = String(a.descripcion || "")
         .trim()
         .toLowerCase();
@@ -252,7 +259,28 @@ export default function Factura() {
       return codigo === texto || descripcion.includes(texto);
     });
 
-    return encontrado || null;
+    if (encontradoLocal) {
+      return encontradoLocal;
+    }
+
+    // Si no está entre los primeros 1000, busca directo en Supabase
+    const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+    const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+    const { data, error } = await supabase
+      .from("articulos")
+      .select("*")
+      .eq("idempresa", idEmpresa)
+      .eq("activo", true)
+      .eq("codigo", String(valor).trim())
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error buscando artículo por código:", error);
+      return null;
+    }
+
+    return data || null;
   };
 
   const obtenerUrlImagen = (path) => {
@@ -326,12 +354,6 @@ export default function Factura() {
       console.error("Error al cargar artículos:", error);
       return;
     }
-    console.log("FACTURA - TOTAL ARTICULOS:", data?.length);
-
-    console.log(
-      "FACTURA - ARTICULO BUSCADO:",
-      data?.find((a) => String(a.codigo || "").trim() === "7792422000043"),
-    );
 
     setArticulos(data || []);
   };
@@ -421,9 +443,7 @@ export default function Factura() {
     localStorage.removeItem("presupuestoOrigen");
   }, [clientes]);
   // CONTROL TEMPORAL
-  useEffect(() => {
-    console.log("ID presupuesto de origen actual:", idPresupuestoOrigen);
-  }, [idPresupuestoOrigen]);
+  useEffect(() => {}, [idPresupuestoOrigen]);
 
   const agregarDetalle = () => {
     const art =
@@ -478,6 +498,19 @@ export default function Factura() {
       inputArticuloRef.current?.focus();
     }, 0);
   };
+  const cambiarDescripcionDetalle = (id, nuevaDescripcion) => {
+    setDetalle((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              descripcion: nuevaDescripcion,
+              articulo: nuevaDescripcion,
+            }
+          : item,
+      ),
+    );
+  };
 
   const eliminarDetalle = (id) => {
     setDetalle((prev) => prev.filter((item) => item.id !== id));
@@ -508,6 +541,25 @@ export default function Factura() {
     setIdPresupuestoOrigen(null);
   };
 
+  const abrirEditarDescripcion = (item) => {
+    setItemEditando(item);
+    setDescripcionEditada(item.descripcion || "");
+    setDialogEditarDescripcion(true);
+  };
+
+  const guardarDescripcionEditada = () => {
+    if (!itemEditando) return;
+
+    const nuevaDescripcion = descripcionEditada.trim();
+
+    if (!nuevaDescripcion) return;
+
+    cambiarDescripcionDetalle(itemEditando.id, nuevaDescripcion);
+
+    setDialogEditarDescripcion(false);
+    setItemEditando(null);
+    setDescripcionEditada("");
+  };
   const guardarFactura = async () => {
     if (guardando) return;
     setGuardando(true);
@@ -588,7 +640,6 @@ export default function Factura() {
         estado_presupuesto:
           tipoComprobante === "presupuesto" ? "pendiente" : null,
       };
-      console.log("Factura nueva antes de guardar:", facturaNueva);
 
       const { data, error } = await supabase
         .from("facturas")
@@ -615,9 +666,6 @@ export default function Factura() {
             })
             .eq("id", idEmpresa)
             .select();
-
-        console.log("empresaActualizada:", empresaActualizada);
-        console.log("errorPresupuesto:", errorPresupuesto);
 
         if (errorPresupuesto) {
           console.error(
@@ -821,11 +869,6 @@ export default function Factura() {
       const idPresupuestoParaActualizar =
         data?.idpresupuesto_origen || idPresupuestoOrigen;
 
-      console.log(
-        "Presupuesto que se marcará como facturado:",
-        idPresupuestoParaActualizar,
-      );
-
       if (idPresupuestoParaActualizar) {
         const { data: presupuestoActualizado, error: errorPresupuesto } =
           await supabase
@@ -836,8 +879,6 @@ export default function Factura() {
             .eq("id", idPresupuestoParaActualizar)
             .select("id, estado_presupuesto")
             .single();
-
-        console.log("Presupuesto actualizado:", presupuestoActualizado);
 
         if (errorPresupuesto) {
           console.error(
@@ -970,6 +1011,14 @@ export default function Factura() {
             onClick={() => abrirFoto(params.row.imagen_url)}
           >
             <VisibilityIcon fontSize="small" />
+          </IconButton>
+
+          <IconButton
+            size="small"
+            color="warning"
+            onClick={() => abrirEditarDescripcion(params.row)}
+          >
+            <EditIcon fontSize="small" />
           </IconButton>
 
           <IconButton
@@ -1253,14 +1302,15 @@ export default function Factura() {
                     inputRef={inputArticuloRef}
                     label="Artículo o código de barras"
                     fullWidth
-                    onKeyDown={(e) => {
+                    onKeyDown={async (e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
 
                         const texto = inputArticulo.trim();
                         if (!texto) return;
 
-                        const articulo = buscarPorCodigoODescripcion(texto);
+                        const articulo =
+                          await buscarPorCodigoODescripcion(texto);
 
                         if (articulo) {
                           elegirArticulo(articulo);
@@ -1528,6 +1578,44 @@ export default function Factura() {
           }))
         }
       />
+      <Dialog
+        open={dialogEditarDescripcion}
+        onClose={() => setDialogEditarDescripcion(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar descripción del artículo</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Descripción"
+            value={descripcionEditada}
+            onChange={(e) => setDescripcionEditada(e.target.value)}
+            sx={{ mt: 1 }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                guardarDescripcionEditada();
+              }
+            }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={() => setDialogEditarDescripcion(false)}
+            color="inherit"
+          >
+            Cancelar
+          </Button>
+
+          <Button onClick={guardarDescripcionEditada} variant="contained">
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

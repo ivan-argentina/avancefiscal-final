@@ -34,6 +34,7 @@ import {
   TextField,
   Snackbar,
   Alert,
+  DialogActions,
   MenuItem,
 } from "@mui/material";
 
@@ -57,7 +58,11 @@ export default function Facturas() {
   const [mensaje, setMensaje] = useState("");
   const [tipoMensaje, setTipoMensaje] = useState("info");
   const [openMensaje, setOpenMensaje] = useState(false);
+  const [openWhatsapp, setOpenWhatsapp] = useState(false);
+  const [telefonoWhatsapp, setTelefonoWhatsapp] = useState("");
+  const [facturaWhatsapp, setFacturaWhatsapp] = useState(null);
   const [vistaComprobantes, setVistaComprobantes] = useState("fiscales");
+
   const [notificacion, setNotificacion] = useState({
     open: false,
     mensaje: "",
@@ -70,7 +75,17 @@ export default function Facturas() {
       tipo,
     });
   };
+  const abrirDialogWhatsapp = (factura) => {
+    setFacturaWhatsapp(factura);
+    setTelefonoWhatsapp(factura.clientes?.telefono || "");
+    setOpenWhatsapp(true);
+  };
 
+  const abrirWhatsapp = (factura) => {
+    setFacturaWhatsapp(factura);
+    setTelefonoWhatsapp(factura.clientes?.telefono || "");
+    setOpenWhatsapp(true);
+  };
   const crearNotaCredito = (factura) => {
     localStorage.setItem("notaCreditoOrigen", JSON.stringify(factura));
 
@@ -151,16 +166,21 @@ export default function Facturas() {
     }
   };
 
-  const enviarWhatsAppFactura = async (factura) => {
-    console.log("Entro a enviar por whtswapp:", factura);
-    let telefono = String(factura.clientes?.telefono || "").replace(/\D/g, "");
+  const enviarWhatsAppFactura = (factura) => {
+    setFacturaWhatsapp(factura);
+    setTelefonoWhatsapp(factura.clientes?.telefono || "");
+    setOpenWhatsapp(true);
+  };
+  const confirmarEnvioWhatsapp = async () => {
+    if (!facturaWhatsapp) return;
+
+    let telefono = String(telefonoWhatsapp || "").replace(/\D/g, "");
 
     if (!telefono) {
-      console.warn("El cliente no tiene teléfono cargado");
-      mostrarNotificacion("El cliente no tiene teléfono cargado", "warning");
+      mostrarNotificacion("Ingresá un número de celular", "warning");
       return;
     }
-    console.log("Teléfono recibido:", factura.clientes?.telefono);
+
     if (telefono.startsWith("54")) {
       telefono = telefono.slice(2);
     }
@@ -178,13 +198,12 @@ export default function Facturas() {
     const numeroWhatsApp = `54${telefono}`;
 
     const mensaje =
-      `Hola ${factura.clientes?.nombre || ""}, ` +
+      `Hola ${facturaWhatsapp.clientes?.nombre || ""}, ` +
       `te enviamos el comprobante N° ` +
-      `${factura.numero_fiscal || factura.numero || ""}. ` +
+      `${facturaWhatsapp.numero_fiscal || facturaWhatsapp.numero || ""}. ` +
       `El PDF fue descargado para que puedas adjuntarlo.`;
 
     const ventanaWhatsApp = window.open("", "_blank");
-    console.log("Ventana WhatsApp:", ventanaWhatsApp);
 
     if (!ventanaWhatsApp) {
       mostrarNotificacion(
@@ -199,13 +218,15 @@ export default function Facturas() {
       `?text=${encodeURIComponent(mensaje)}`;
 
     try {
-      setWhatsAppPendiente({
-        ventana: ventanaWhatsApp,
-        url: urlWhatsApp,
-      });
+      setOpenWhatsapp(false);
 
-      await descargarPdfFactura(factura, "whatsapp");
-      console.log("Preparando PDF para WhatsApp:", urlWhatsApp);
+      await descargarPdfFactura(facturaWhatsapp, "whatsapp", telefonoWhatsapp);
+
+      console.log("Abriendo WhatsApp:", urlWhatsApp);
+
+      ventanaWhatsApp.location.replace(urlWhatsApp);
+
+      await descargarPdfFactura(facturaWhatsapp, "whatsapp", telefonoWhatsapp);
     } catch (error) {
       ventanaWhatsApp.close();
 
@@ -331,9 +352,9 @@ estado_presupuesto,
 
     const detalleFormateado = (data || []).map((item) => ({
       id: item.id,
-      articulo: item?.articulos?.descripcion || item.descripcion || "-",
-      descripcion: item?.articulos?.descripcion || item.descripcion || "-",
-      nombre: item?.articulos?.descripcion || item.descripcion || "-",
+      articulo: item.descripcion || item?.articulos?.descripcion || "-",
+      descripcion: item.descripcion || item?.articulos?.descripcion || "-",
+      nombre: item.descripcion || item?.articulos?.descripcion || "-",
       cantidad: item.cantidad,
       precio: item.precio,
       subtotal: item.subtotal,
@@ -343,7 +364,11 @@ estado_presupuesto,
     setOpenDetalle(true);
   };
 
-  const descargarPdfFactura = async (factura, modo = "descargar") => {
+  const descargarPdfFactura = async (
+    factura,
+    modo = "descargar",
+    telefonoWhatsapp = "",
+  ) => {
     try {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
@@ -404,7 +429,7 @@ estado_presupuesto,
 
       const detalleFormateado = (data || []).map((item) => {
         const descripcion =
-          item?.articulos?.descripcion || item.descripcion || "-";
+          item.descripcion || item?.articulos.descripcion || "-";
 
         return {
           id: item.id,
@@ -654,9 +679,7 @@ estado_presupuesto,
           html: `
       <p>Hola ${factura.clientes?.nombre || ""},</p>
 
-      <p>
-        Le enviamos adjunto el comprobante correspondiente.
-      </p>
+      <p>Le enviamos adjunto el comprobante correspondiente.</p>
 
       <p>
         <strong>Total:</strong>
@@ -669,14 +692,19 @@ estado_presupuesto,
       <p>Muchas gracias.</p>
 
       <p>
-        <strong>
-          ${empresaData?.razon_social || "Avance Fiscal"}
-        </strong>
+        <strong>${empresaData?.razon_social || "Avance Fiscal"}</strong>
       </p>
     `,
         });
 
         setPdfModo("email");
+      } else if (modo === "whatsapp") {
+        setWhatsAppPendiente({
+          telefono: telefonoWhatsapp || factura.clientes?.telefono || "",
+          filename: nombrePdf,
+        });
+
+        setPdfModo("whatsapp");
       } else {
         setPdfModo(modo || "descargar");
       }
@@ -1049,7 +1077,7 @@ estado_presupuesto,
             >
               <IconButton
                 color="secondary"
-                onClick={() => descargarPdfFactura(params.row)}
+                onClick={() => abrirDialogWhatsapp(params.row)}
               >
                 <PictureAsPdfIcon />
               </IconButton>
@@ -1336,6 +1364,73 @@ estado_presupuesto,
           }))
         }
       />
+      <Dialog
+        open={openWhatsapp}
+        onClose={() => setOpenWhatsapp(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Enviar por WhatsApp</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Número de celular"
+            value={telefonoWhatsapp}
+            onChange={(e) => setTelefonoWhatsapp(e.target.value)}
+            placeholder="Ej: 3498123456"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpenWhatsapp(false)}>Cancelar</Button>
+
+          <Button variant="contained" onClick={confirmarEnvioWhatsapp}>
+            Enviar
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={openWhatsapp}
+        onClose={() => setOpenWhatsapp(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Enviar por WhatsApp</DialogTitle>
+
+        <DialogContent>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Número de celular"
+            value={telefonoWhatsapp}
+            onChange={(e) => setTelefonoWhatsapp(e.target.value)}
+            placeholder="Ej: 3498123456"
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpenWhatsapp(false)}>Cancelar</Button>
+
+          <Button
+            variant="contained"
+            onClick={() => {
+              setOpenWhatsapp(false);
+
+              descargarPdfFactura(
+                facturaWhatsapp,
+                "whatsapp",
+                telefonoWhatsapp,
+              );
+            }}
+          >
+            Enviar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
