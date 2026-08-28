@@ -62,6 +62,7 @@ export default function Facturas() {
   const [telefonoWhatsapp, setTelefonoWhatsapp] = useState("");
   const [facturaWhatsapp, setFacturaWhatsapp] = useState(null);
   const [vistaComprobantes, setVistaComprobantes] = useState("fiscales");
+  const whatsAppPendienteRef = useRef(null);
 
   const [notificacion, setNotificacion] = useState({
     open: false,
@@ -171,6 +172,7 @@ export default function Facturas() {
     setTelefonoWhatsapp(factura.clientes?.telefono || "");
     setOpenWhatsapp(true);
   };
+
   const confirmarEnvioWhatsapp = async () => {
     if (!facturaWhatsapp) return;
 
@@ -203,33 +205,25 @@ export default function Facturas() {
       `${facturaWhatsapp.numero_fiscal || facturaWhatsapp.numero || ""}. ` +
       `El PDF fue descargado para que puedas adjuntarlo.`;
 
-    const ventanaWhatsApp = window.open("", "_blank");
-
-    if (!ventanaWhatsApp) {
-      mostrarNotificacion(
-        "El navegador bloqueó la ventana de WhatsApp",
-        "warning",
-      );
-      return;
-    }
-
     const urlWhatsApp =
-      `https://wa.me/${numeroWhatsApp}` +
-      `?text=${encodeURIComponent(mensaje)}`;
+      `https://web.whatsapp.com/send?phone=${numeroWhatsApp}` +
+      `&text=${encodeURIComponent(mensaje)}`;
 
     try {
+      const ventanaWhatsApp = window.open(urlWhatsApp, "avanceFiscalWhatsApp");
+
+      if (!ventanaWhatsApp) {
+        mostrarNotificacion(
+          "El navegador bloqueó la ventana de WhatsApp",
+          "warning",
+        );
+        return;
+      }
+
       setOpenWhatsapp(false);
 
       await descargarPdfFactura(facturaWhatsapp, "whatsapp", telefonoWhatsapp);
-
-      console.log("Abriendo WhatsApp:", urlWhatsApp);
-
-      ventanaWhatsApp.location.replace(urlWhatsApp);
-
-      await descargarPdfFactura(facturaWhatsapp, "whatsapp", telefonoWhatsapp);
     } catch (error) {
-      ventanaWhatsApp.close();
-
       console.error("Error al preparar WhatsApp:", error);
 
       mostrarNotificacion("No se pudo generar el PDF", "error");
@@ -257,7 +251,7 @@ export default function Facturas() {
     idfactura_origen,
      numero_origen,
      idpresupuesto_origen,
-estado_presupuesto,
+     estado_presupuesto,
     numero,
     fecha,
     tipo_comprobante,
@@ -780,19 +774,6 @@ estado_presupuesto,
         }
 
         /*
-         * WHATSAPP
-         */
-        if (pdfModo === "whatsapp") {
-          if (whatsAppPendiente?.ventana && whatsAppPendiente?.url) {
-            whatsAppPendiente.ventana.location.href = whatsAppPendiente.url;
-
-            setWhatsAppPendiente(null);
-          } else {
-            throw new Error("No se pudo abrir WhatsApp");
-          }
-        }
-
-        /*
          * EMAIL
          */
         if (pdfModo === "email") {
@@ -1077,7 +1058,7 @@ estado_presupuesto,
             >
               <IconButton
                 color="secondary"
-                onClick={() => abrirDialogWhatsapp(params.row)}
+                onClick={() => descargarPdfFactura(params.row, "descargar")}
               >
                 <PictureAsPdfIcon />
               </IconButton>
@@ -1364,13 +1345,14 @@ estado_presupuesto,
           }))
         }
       />
+
       <Dialog
         open={openWhatsapp}
         onClose={() => setOpenWhatsapp(false)}
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Enviar por WhatsApp</DialogTitle>
+        <DialogTitle>Enviar por WhatsApp111</DialogTitle>
 
         <DialogContent>
           <TextField
@@ -1388,45 +1370,6 @@ estado_presupuesto,
           <Button onClick={() => setOpenWhatsapp(false)}>Cancelar</Button>
 
           <Button variant="contained" onClick={confirmarEnvioWhatsapp}>
-            Enviar
-          </Button>
-        </DialogActions>
-      </Dialog>
-      <Dialog
-        open={openWhatsapp}
-        onClose={() => setOpenWhatsapp(false)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>Enviar por WhatsApp</DialogTitle>
-
-        <DialogContent>
-          <TextField
-            autoFocus
-            fullWidth
-            label="Número de celular"
-            value={telefonoWhatsapp}
-            onChange={(e) => setTelefonoWhatsapp(e.target.value)}
-            placeholder="Ej: 3498123456"
-            sx={{ mt: 1 }}
-          />
-        </DialogContent>
-
-        <DialogActions>
-          <Button onClick={() => setOpenWhatsapp(false)}>Cancelar</Button>
-
-          <Button
-            variant="contained"
-            onClick={() => {
-              setOpenWhatsapp(false);
-
-              descargarPdfFactura(
-                facturaWhatsapp,
-                "whatsapp",
-                telefonoWhatsapp,
-              );
-            }}
-          >
             Enviar
           </Button>
         </DialogActions>

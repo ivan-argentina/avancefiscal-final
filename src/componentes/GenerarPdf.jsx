@@ -178,8 +178,8 @@ const GenerarPdf = forwardRef(
                   src={empresa.logo_url}
                   alt="Logo empresa"
                   sx={{
-                    width: 120,
-                    maxHeight: 90,
+                    width: 170,
+                    maxHeight: 120,
                     objectFit: "contain",
                     mb: 1,
                     ml: 1,

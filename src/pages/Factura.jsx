@@ -330,6 +330,7 @@ export default function Factura() {
     `,
       )
       .eq("idempresa", idEmpresa)
+      .eq("activo", true)
       .order("nombre");
 
     if (error) {
