@@ -13,8 +13,12 @@ import {
   TextField,
   Tooltip,
   Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
-
+import KeyIcon from "@mui/icons-material/Key";
 import { DataGrid } from "@mui/x-data-grid";
 
 import EditIcon from "@mui/icons-material/Edit";
@@ -42,6 +46,10 @@ export default function AbmUsuarios() {
 
   const [editandoId, setEditandoId] = useState(null);
   const [relacionEditandoId, setRelacionEditandoId] = useState(null);
+  const [openPassword, setOpenPassword] = useState(false);
+  const [usuarioPassword, setUsuarioPassword] = useState(null);
+  const [passwordNueva, setPasswordNueva] = useState("");
+  const [passwordConfirmar, setPasswordConfirmar] = useState("");
 
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
@@ -354,6 +362,115 @@ export default function AbmUsuarios() {
       setLoading(false);
     }
   };
+  const abrirRestablecerPassword = (fila) => {
+    setUsuarioPassword(fila);
+    setPasswordNueva("");
+    setPasswordConfirmar("");
+    setOpenPassword(true);
+  };
+
+  const cerrarRestablecerPassword = () => {
+    setOpenPassword(false);
+    setUsuarioPassword(null);
+    setPasswordNueva("");
+    setPasswordConfirmar("");
+  };
+
+  const confirmarRestablecerPassword = async () => {
+    try {
+      if (!usuarioPassword?.usuarios?.id) {
+        setMensaje("No se pudo identificar el usuario");
+        setTipo("error");
+        setOpen(true);
+        return;
+      }
+
+      if (!passwordNueva.trim() || !passwordConfirmar.trim()) {
+        setMensaje("Completá las dos contraseñas");
+        setTipo("warning");
+        setOpen(true);
+        return;
+      }
+
+      if (passwordNueva !== passwordConfirmar) {
+        setMensaje("Las contraseñas no coinciden");
+        setTipo("warning");
+        setOpen(true);
+        return;
+      }
+
+      const passwordValida =
+        passwordNueva.length >= 8 &&
+        /[A-Z]/.test(passwordNueva) &&
+        /[a-z]/.test(passwordNueva) &&
+        /\d/.test(passwordNueva);
+
+      if (!passwordValida) {
+        setMensaje(
+          "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número",
+        );
+        setTipo("warning");
+        setOpen(true);
+        return;
+      }
+
+      setLoading(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session?.access_token) {
+        throw new Error("La sesión venció. Volvé a iniciar sesión.");
+      }
+
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3001";
+
+      const respuesta = await fetch(
+        `${API_URL}/api/auth/usuarios/${usuarioPassword.usuarios.id}/restablecer-password`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            password: passwordNueva.trim(),
+          }),
+        },
+      );
+
+      let resultado;
+
+      try {
+        resultado = await respuesta.json();
+      } catch {
+        throw new Error("El servidor no devolvió una respuesta válida");
+      }
+
+      if (!respuesta.ok || !resultado?.ok) {
+        throw new Error(
+          resultado?.error || "No se pudo restablecer la contraseña",
+        );
+      }
+
+      cerrarRestablecerPassword();
+
+      setMensaje(
+        "Contraseña provisoria asignada correctamente. El usuario deberá cambiarla al ingresar.",
+      );
+      setTipo("success");
+      setOpen(true);
+    } catch (error) {
+      console.error("Error restableciendo contraseña:", error);
+
+      setMensaje(error?.message || "No se pudo restablecer la contraseña");
+      setTipo("error");
+      setOpen(true);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const columns = [
     {
@@ -407,6 +524,26 @@ export default function AbmUsuarios() {
             onClick={() => editarUsuario(params.row)}
           >
             <EditIcon />
+          </IconButton>
+        </Tooltip>
+      ),
+    },
+    {
+      field: "password",
+      headerName: "",
+      width: 70,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      align: "center",
+      renderCell: (params) => (
+        <Tooltip title="Restablecer contraseña">
+          <IconButton
+            color="secondary"
+            size="small"
+            onClick={() => abrirRestablecerPassword(params.row)}
+          >
+            <KeyIcon />
           </IconButton>
         </Tooltip>
       ),
@@ -603,6 +740,54 @@ export default function AbmUsuarios() {
           pageSizeOptions={[10, 20, 50, 100]}
         />
       </Paper>
+
+      <Dialog
+        open={openPassword}
+        onClose={cerrarRestablecerPassword}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Restablecer contraseña</DialogTitle>
+
+        <DialogContent>
+          <Typography sx={{ mb: 2 }}>
+            Usuario: <strong>{usuarioPassword?.usuarios?.nombre || ""}</strong>
+          </Typography>
+
+          <TextField
+            label="Nueva contraseña"
+            type="password"
+            fullWidth
+            size="small"
+            value={passwordNueva}
+            onChange={(e) => setPasswordNueva(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+
+          <TextField
+            label="Confirmar contraseña"
+            type="password"
+            fullWidth
+            size="small"
+            value={passwordConfirmar}
+            onChange={(e) => setPasswordConfirmar(e.target.value)}
+          />
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={cerrarRestablecerPassword} disabled={loading}>
+            Cancelar
+          </Button>
+
+          <Button
+            variant="contained"
+            onClick={confirmarRestablecerPassword}
+            disabled={loading}
+          >
+            {loading ? "CAMBIANDO..." : "CAMBIAR CONTRASEÑA"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Snackbar
         open={open}

@@ -33,12 +33,14 @@ import { useNavigate } from "react-router-dom";
 import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import AbmEmpresas from "./AbmEmpresas";
 import AbmUsuarios from "./AbmUsuarios";
+import Abonos from "./Abonos";
 import SelectorEmpresa from "../componentes/SelectorEmpresa";
 import ImportarDatos from "./ImportarDatos";
 import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
 import SettingsIcon from "@mui/icons-material/Settings";
 import CambiarPassword from "./CambiarPassword";
+
 import { supabase } from "../hook/supabaseClient";
 const drawerWidth = 200;
 
@@ -199,6 +201,14 @@ export default function InicioFactu() {
                   sx={{ color: "white" }}
                 >
                   <ListItemText primary="Usuarios" />
+                </ListItemButton>
+                <ListItemButton
+                  component={Link}
+                  to="/abonos"
+                  selected={location.pathname === "/abonos"}
+                  sx={{ color: "white" }}
+                >
+                  <ListItemText primary="Abonos" />
                 </ListItemButton>
               </>
             )}
@@ -682,13 +692,40 @@ export default function InicioFactu() {
             />
             <Route path="/proveedores" element={<AbmProveedores />} />
             <Route path="/compra" element={<Compra />} />
-            <Route path="/empresas" element={<AbmEmpresas />} />
-            <Route path="/usuarios" element={<AbmUsuarios />} />
+
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/importar-datos" element={<ImportarDatos />} />
             <Route path="/configuracion" element={<Configuracion />} />
             <Route path="/cambiar-password" element={<CambiarPassword />} />
             <Route path="/restablecer-password" element={<CambiarPassword />} />
+            <Route
+              path="/empresas"
+              element={
+                esSuperAdmin ? (
+                  <AbmEmpresas />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
+
+            <Route
+              path="/usuarios"
+              element={
+                esSuperAdmin ? (
+                  <AbmUsuarios />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )
+              }
+            />
+
+            <Route
+              path="/abonos"
+              element={
+                esSuperAdmin ? <Abonos /> : <Navigate to="/dashboard" replace />
+              }
+            />
           </Routes>
         </Box>
       </Box>

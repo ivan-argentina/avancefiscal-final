@@ -52,6 +52,7 @@ export default function AbmEmpresas() {
   const [tipoMensaje, setTipoMensaje] = useState("info");
   const [openMensaje, setOpenMensaje] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [abonoMensual, setAbonoMensual] = useState("");
   const [confirmDialog, setConfirmDialog] = useState({
     open: false,
     titulo: "",
@@ -143,6 +144,7 @@ export default function AbmEmpresas() {
     setArchivoLogo(null);
     setLogoUrl("");
     setErrorCuit("");
+    setAbonoMensual("");
   };
   const guardarEmpresa = async () => {
     const razonSocialLimpia = String(razonSocial || "").trim();
@@ -268,6 +270,7 @@ export default function AbmEmpresas() {
         ambiente_fiscal: ambienteFiscal,
         idciudad: Number(idCiudad),
         activo,
+        abono_mensual: Number(abonoMensual || 0),
         condicion_iva: condicionIva,
 
         categoria_monotributo:
@@ -358,7 +361,11 @@ export default function AbmEmpresas() {
     setPuntoVenta(empresa.punto_venta || "");
     setAmbienteFiscal(empresa.ambiente_fiscal || "homologacion");
     setActivo(empresa.activo ?? true);
-
+    setAbonoMensual(
+      empresa.abono_mensual !== null && empresa.abono_mensual !== undefined
+        ? String(empresa.abono_mensual)
+        : "40000",
+    );
     setArchivoCertificado(null);
     setArchivoKey(null);
     setArchivoLogo(null);
@@ -437,6 +444,13 @@ export default function AbmEmpresas() {
     { field: "cuit", headerName: "CUIT", width: 140 },
     { field: "telefono", headerName: "Telefono", width: 140 },
     { field: "email", headerName: "Email", flex: 1 },
+    {
+      field: "abono_mensual",
+      headerName: "Abono",
+      width: 130,
+      valueFormatter: (value) =>
+        `$${Number(value || 0).toLocaleString("es-AR")}`,
+    },
     {
       field: "acciones",
       headerName: "Acciones",
@@ -655,6 +669,22 @@ export default function AbmEmpresas() {
               <MenuItem value="true">Activa</MenuItem>
               <MenuItem value="false">Inactiva</MenuItem>
             </TextField>
+          </Grid>
+          <Grid size={{ xs: 12, md: 2 }}>
+            <TextField
+              label="Abono mensual"
+              type="number"
+              value={abonoMensual}
+              onChange={(e) => setAbonoMensual(e.target.value)}
+              fullWidth
+              size="small"
+              slotProps={{
+                htmlInput: {
+                  min: 0,
+                  step: 1000,
+                },
+              }}
+            />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <Typography variant="subtitle1" fontWeight={700} sx={{ mt: 1 }}>
