@@ -345,6 +345,137 @@ app.post("/api/auth/usuarios", async (req, res) => {
   }
 });
 
+app.post("/api/auth/usuarios/:id/restablecer-password", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const authorization = String(req.headers.authorization || "");
+
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    const passwordNueva = String(req.body.password || "").trim();
+
+    if (!accessToken) {
+      return res.status(401).json({
+        ok: false,
+        error: "Sesión no válida.",
+      });
+    }
+
+    if (!passwordNueva) {
+      return res.status(400).json({
+        ok: false,
+        error: "Ingresá una contraseña provisoria.",
+      });
+    }
+
+    const passwordValida =
+      passwordNueva.length >= 8 &&
+      /[A-Z]/.test(passwordNueva) &&
+      /[a-z]/.test(passwordNueva) &&
+      /\d/.test(passwordNueva);
+
+    if (!passwordValida) {
+      return res.status(400).json({
+        ok: false,
+        error:
+          "La contraseña debe tener al menos 8 caracteres, una mayúscula, una minúscula y un número.",
+      });
+    }
+
+    // Validamos quién está haciendo la operación
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabaseAuth.auth.getUser(accessToken);
+
+    if (authError || !authUser) {
+      return res.status(401).json({
+        ok: false,
+        error: "La sesión venció o no es válida.",
+      });
+    }
+
+    // Comprobamos que sea superadmin
+    const { data: usuarioAdmin, error: errorAdmin } = await supabase
+      .from("usuarios")
+      .select("id, rol_global, activo")
+      .eq("auth_user_id", authUser.id)
+      .maybeSingle();
+
+    if (
+      errorAdmin ||
+      !usuarioAdmin ||
+      usuarioAdmin.rol_global !== "superadmin" ||
+      !usuarioAdmin.activo
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: "No tenés permiso para restablecer contraseñas.",
+      });
+    }
+
+    // Buscamos el usuario al que queremos cambiarle la contraseña
+    const { data: usuarioObjetivo, error: errorUsuario } = await supabase
+      .from("usuarios")
+      .select("id, auth_user_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (errorUsuario || !usuarioObjetivo) {
+      return res.status(404).json({
+        ok: false,
+        error: "No se encontró el usuario.",
+      });
+    }
+
+    if (!usuarioObjetivo.auth_user_id) {
+      return res.status(400).json({
+        ok: false,
+        error: "El usuario no está vinculado con Supabase Auth.",
+      });
+    }
+
+    // Cambiamos la contraseña en Supabase Auth
+    const { error: errorPassword } = await supabase.auth.admin.updateUserById(
+      usuarioObjetivo.auth_user_id,
+      {
+        password: passwordNueva,
+      },
+    );
+
+    if (errorPassword) {
+      throw errorPassword;
+    }
+
+    // Obligamos al usuario a cambiar la contraseña al ingresar
+    const { error: errorActualizar } = await supabase
+      .from("usuarios")
+      .update({
+        debe_cambiar_password: true,
+      })
+      .eq("id", id);
+
+    if (errorActualizar) {
+      throw errorActualizar;
+    }
+
+    return res.json({
+      ok: true,
+      mensaje: "Contraseña restablecida correctamente.",
+    });
+  } catch (error) {
+    console.error("Error restableciendo contraseña:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error?.message || "No se pudo restablecer la contraseña.",
+    });
+  }
+});
+
 app.put("/api/auth/usuarios/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -749,54 +880,47 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
 
     const detalleAfip = resultadoAfip?.FeDetResp?.FECAEDetResponse?.[0];
 
-if (!detalleAfip || detalleAfip.Resultado !== "A") {
-  const erroresGenerales = resultadoAfip?.Errors?.Err || [];
-  const observaciones = detalleAfip?.Observaciones?.Obs || [];
+    if (!detalleAfip || detalleAfip.Resultado !== "A") {
+      const erroresGenerales = resultadoAfip?.Errors?.Err || [];
+      const observaciones = detalleAfip?.Observaciones?.Obs || [];
 
-  const listaErrores = [
-    ...(Array.isArray(erroresGenerales)
-      ? erroresGenerales
-      : [erroresGenerales]),
-    ...(Array.isArray(observaciones)
-      ? observaciones
-      : [observaciones]),
-  ].filter(Boolean);
+      const listaErrores = [
+        ...(Array.isArray(erroresGenerales)
+          ? erroresGenerales
+          : [erroresGenerales]),
+        ...(Array.isArray(observaciones) ? observaciones : [observaciones]),
+      ].filter(Boolean);
 
-  const primerError = listaErrores[0];
+      const primerError = listaErrores[0];
 
-  const afipErrorCode = primerError?.Code
-    ? String(primerError.Code)
-    : "";
+      const afipErrorCode = primerError?.Code ? String(primerError.Code) : "";
 
-  const afipErrorMsg =
-    primerError?.Msg || "ARCA rechazó el comprobante";
+      const afipErrorMsg = primerError?.Msg || "ARCA rechazó el comprobante";
 
-  const esErrorTransitorio = ["500", "501", "502"].includes(
-    afipErrorCode,
-  );
+      const esErrorTransitorio = ["500", "501", "502"].includes(afipErrorCode);
 
-  await supabase
-    .from("facturas")
-    .update({
-      estado_fiscal: esErrorTransitorio ? "pendiente" : "rechazada",
-      afip_error_code: afipErrorCode,
-      afip_error_msg: afipErrorMsg,
-    })
-    .eq("id", idFactura);
+      await supabase
+        .from("facturas")
+        .update({
+          estado_fiscal: esErrorTransitorio ? "pendiente" : "rechazada",
+          afip_error_code: afipErrorCode,
+          afip_error_msg: afipErrorMsg,
+        })
+        .eq("id", idFactura);
 
-  return res.status(esErrorTransitorio ? 503 : 400).json({
-    ok: false,
-    mensaje: esErrorTransitorio
-      ? "ARCA presenta un inconveniente temporal. Intente nuevamente más tarde."
-      : "ARCA rechazó la factura",
-    errorAfip: {
-      code: afipErrorCode,
-      msg: afipErrorMsg,
-    },
-    resultadoAfip,
-  });
-}
-    
+      return res.status(esErrorTransitorio ? 503 : 400).json({
+        ok: false,
+        mensaje: esErrorTransitorio
+          ? "ARCA presenta un inconveniente temporal. Intente nuevamente más tarde."
+          : "ARCA rechazó la factura",
+        errorAfip: {
+          code: afipErrorCode,
+          msg: afipErrorMsg,
+        },
+        resultadoAfip,
+      });
+    }
+
     const cae = detalleAfip.CAE;
     const caeVto = formatearFechaAfip(detalleAfip.CAEFchVto);
     const numeroFiscal = detalleAfip.CbteDesde;
