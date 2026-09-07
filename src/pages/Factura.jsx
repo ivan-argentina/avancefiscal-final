@@ -608,14 +608,27 @@ export default function Factura() {
         alert("Ingresá la cantidad de días de validez del presupuesto.");
         return;
       }
+      const letraComprobante = obtenerLetraComprobante(
+        tipoComprobante,
+        clienteSeleccionado,
+      );
+
+      const esFacturaConIva =
+        letraComprobante === "A" || letraComprobante === "B";
+
+      const netoGravado = esFacturaConIva
+        ? Number((totalCalc / 1.21).toFixed(2))
+        : 0;
+
+      const iva21 = esFacturaConIva
+        ? Number((totalCalc - netoGravado).toFixed(2))
+        : 0;
+
       const facturaNueva = {
         fecha,
         idcliente: clienteId,
         tipo_comprobante: tipoComprobante,
-        letra_comprobante: obtenerLetraComprobante(
-          tipoComprobante,
-          clienteSeleccionado,
-        ),
+        letra_comprobante: letraComprobante,
         forma_pago: formaPago,
         medio_pago: formaPago === "Contado" ? medioPago : null,
         observaciones: observaciones || "",
@@ -623,6 +636,10 @@ export default function Factura() {
           tipoComprobante === "presupuesto" ? Number(validezPresupuesto) : null,
         subtotal: totalCalc,
         total: totalCalc,
+        neto_gravado: netoGravado,
+        iva_21: iva21,
+        importe_exento: 0,
+        importe_no_gravado: 0,
         saldo: formaPago === "Cuenta corriente" ? totalCalc : 0,
         estado_pago: formaPago === "Cuenta corriente" ? "pendiente" : "pagada",
         idempresa: idEmpresa,
