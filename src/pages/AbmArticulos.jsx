@@ -502,7 +502,8 @@ export default function AbmArticulos() {
             familias!fk_articulos_familia(nombre)`,
         )
         .eq("idempresa", idEmpresa)
-        .order("descripcion", { ascending: true }),
+        .order("descripcion", { ascending: true })
+        .range(0, 4999),
     ]);
 
     if (familiasResp.error) {
