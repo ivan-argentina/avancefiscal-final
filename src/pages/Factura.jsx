@@ -263,20 +263,24 @@ export default function Factura() {
       return encontradoLocal;
     }
 
-    // Si no está entre los primeros 1000, busca directo en Supabase
+    // Si no está cargado, busca directamente en Supabase
+    // por código o por descripción
     const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
     const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+    const valorOriginal = String(valor).trim();
 
     const { data, error } = await supabase
       .from("articulos")
       .select("*")
       .eq("idempresa", idEmpresa)
       .eq("activo", true)
-      .eq("codigo", String(valor).trim())
+      .or(`codigo.eq.${valorOriginal},descripcion.ilike.%${valorOriginal}%`)
+      .limit(1)
       .maybeSingle();
 
     if (error) {
-      console.error("Error buscando artículo por código:", error);
+      console.error("Error buscando artículo:", error);
       return null;
     }
 
@@ -349,7 +353,8 @@ export default function Factura() {
       .from("articulos")
       .select("*")
       .eq("idempresa", idEmpresa)
-      .order("descripcion", { ascending: true });
+      .order("descripcion", { ascending: true })
+      .range(0, 4999);
 
     if (error) {
       console.error("Error al cargar artículos:", error);
