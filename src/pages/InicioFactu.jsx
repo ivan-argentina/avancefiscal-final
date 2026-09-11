@@ -40,8 +40,9 @@ import FileUploadIcon from "@mui/icons-material/FileUpload";
 import Dashboard from "./Dashboard";
 import SettingsIcon from "@mui/icons-material/Settings";
 import CambiarPassword from "./CambiarPassword";
-
 import { supabase } from "../hook/supabaseClient";
+import LibroIvaVentas from "./LibroIvaVentas";
+
 const drawerWidth = 200;
 
 export default function InicioFactu() {
@@ -540,6 +541,23 @@ export default function InicioFactu() {
               >
                 <ListItemText primary="Facturas" />
               </ListItemButton>
+              <ListItemButton
+                component={Link}
+                to="/libro-iva-ventas"
+                selected={location.pathname === "/libro-iva-ventas"}
+                sx={{
+                  pl: 4,
+                  color: "white",
+                  "&:hover": {
+                    backgroundColor: "#1565c0",
+                  },
+                  "&.Mui-selected": {
+                    backgroundColor: "#0d47a1",
+                  },
+                }}
+              >
+                <ListItemText primary="Libro IVA Ventas" />
+              </ListItemButton>
             </List>
           </Collapse>
         </List>
@@ -685,6 +703,7 @@ export default function InicioFactu() {
             <Route path="/articulos" element={<AbmArticulos />} />
             <Route path="/familias" element={<FrmFamilias />} />
             <Route path="/facturas" element={<Facturas />} />
+            <Route path="/libro-iva-ventas" element={<LibroIvaVentas />} />
             <Route path="/resumen-clientes" element={<ResumenClientes />} />
             <Route
               path="/resumen-proveedores"
