@@ -1288,8 +1288,38 @@ export default function Factura() {
                 fullWidth
                 value={articuloSeleccionado}
                 inputValue={inputArticulo}
-                onInputChange={(event, newInputValue) => {
+                onInputChange={async (event, newInputValue, reason) => {
                   setInputArticulo(newInputValue);
+
+                  if (reason !== "input") return;
+
+                  const texto = newInputValue.trim();
+
+                  if (texto.length < 2) {
+                    await cargarArticulos();
+                    return;
+                  }
+
+                  const usuarioGuardado = JSON.parse(
+                    localStorage.getItem("usuario"),
+                  );
+                  const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
+
+                  const { data, error } = await supabase
+                    .from("articulos")
+                    .select("*")
+                    .eq("idempresa", idEmpresa)
+                    .eq("activo", true)
+                    .ilike("descripcion", `%${texto}%`)
+                    .order("descripcion", { ascending: true })
+                    .limit(30);
+
+                  if (error) {
+                    console.error("Error buscando artículos:", error);
+                    return;
+                  }
+
+                  setArticulos(data || []);
                 }}
                 onChange={(event, newValue) => {
                   elegirArticulo(newValue);
