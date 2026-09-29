@@ -455,7 +455,17 @@ const GenerarPdf = forwardRef(
                 const precio = Number(item.precio || 0);
                 const porcentaje = Number(item.descuento_porcentaje || 0);
 
-                const bruto = cantidad * precio;
+                // En Factura A el detalle debe mostrarse sin IVA
+                const esFacturaA = letraComprobante === "A";
+
+                const precioMostrar = esFacturaA ? precio / 1.21 : precio;
+
+                const subtotalOriginal = Number(item.subtotal || 0);
+                const subtotalMostrar = esFacturaA
+                  ? subtotalOriginal / 1.21
+                  : subtotalOriginal;
+
+                const bruto = cantidad * precioMostrar;
                 const importeDescuento = bruto * (porcentaje / 100);
 
                 return (
@@ -471,7 +481,7 @@ const GenerarPdf = forwardRef(
                     <TableCell align="right">{cantidad}</TableCell>
 
                     <TableCell align="right">
-                      $ {formatoMoneda(precio)}
+                      $ {formatoMoneda(precioMostrar)}
                     </TableCell>
 
                     <TableCell align="right">
@@ -481,7 +491,7 @@ const GenerarPdf = forwardRef(
                     </TableCell>
 
                     <TableCell align="right">
-                      $ {formatoMoneda(item.subtotal)}
+                      $ {formatoMoneda(subtotalMostrar)}
                     </TableCell>
                   </TableRow>
                 );
