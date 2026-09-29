@@ -27,6 +27,7 @@ import { useEffect, useState } from "react";
 import ResumenCliente from "./ResumenClientes";
 import ResumenProveedores from "./ResumenProveedores";
 import AbmProveedores from "./AbmProveedores";
+import Caja from "./Caja";
 import Compra from "./Compra";
 import Configuracion from "./Configuracion";
 import { useNavigate } from "react-router-dom";
@@ -309,6 +310,23 @@ export default function InicioFactu() {
               />
             </ListItemButton>
           ))}
+
+          {/* Caja 
+          <ListItemButton
+            component={Link}
+            to="/caja"
+            selected={location.pathname === "/caja"}
+            sx={{
+              color: "white",
+              mt: 1,
+              "&:hover": {
+                backgroundColor: "#1565c0",
+              },
+            }}
+          >
+            <ListItemText primary="Caja" />
+          </ListItemButton>*/}
+
           {/* Proveedores */}
           <ListItemButton
             onClick={() => setOpenProveedores(!openProveedores)}
@@ -709,6 +727,7 @@ export default function InicioFactu() {
               path="/resumen-proveedores"
               element={<ResumenProveedores />}
             />
+            <Route path="/caja" element={<Caja />} />
             <Route path="/proveedores" element={<AbmProveedores />} />
             <Route path="/compra" element={<Compra />} />
 

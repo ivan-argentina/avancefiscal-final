@@ -247,137 +247,131 @@ export async function imprimirTicketFactura(datos) {
   if (!impresoras || impresoras.length === 0) {
     throw new Error("No se encontraron impresoras disponibles");
   }
-  
+
   console.log("Impresoras detectadas por QZ Tray:", impresoras);
 
-/*
- * NORMALIZAR NOMBRES
- */
-const normalizar = (valor) =>
-  String(valor || "")
-    .trim()
-    .toLowerCase();
-
-/*
- * IMPRESORA CONFIGURADA EN LA EMPRESA
- */
-const impresoraGuardada = String(
-  empresa?.impresora_comandera || "",
-).trim();
-
-let nombreImpresora = null;
-
-/*
- * 1. SI LA EMPRESA TIENE UNA IMPRESORA CONFIGURADA,
- *    ESA TIENE PRIORIDAD
- */
-if (impresoraGuardada) {
-  nombreImpresora = impresoras.find(
-    (nombre) =>
-      normalizar(nombre) === normalizar(impresoraGuardada),
-  );
+  /*
+   * NORMALIZAR NOMBRES
+   */
+  const normalizar = (valor) =>
+    String(valor || "")
+      .trim()
+      .toLowerCase();
 
   /*
-   * Si está configurada pero no existe en esta PC,
-   * no elegimos otra impresora automáticamente.
+   * IMPRESORA CONFIGURADA EN LA EMPRESA
+   */
+  const impresoraGuardada = String(empresa?.impresora_comandera || "").trim();
+
+  let nombreImpresora = null;
+
+  /*
+   * 1. SI LA EMPRESA TIENE UNA IMPRESORA CONFIGURADA,
+   *    ESA TIENE PRIORIDAD
+   */
+  if (impresoraGuardada) {
+    nombreImpresora = impresoras.find(
+      (nombre) => normalizar(nombre) === normalizar(impresoraGuardada),
+    );
+
+    /*
+     * Si está configurada pero no existe en esta PC,
+     * no elegimos otra impresora automáticamente.
+     */
+    if (!nombreImpresora) {
+      throw new Error(
+        `La impresora configurada "${impresoraGuardada}" no está disponible en esta PC. Revisá Configuración.`,
+      );
+    }
+
+    console.log("Usando impresora configurada:", nombreImpresora);
+  }
+
+  /*
+   * 2. SI TODAVÍA NO HAY UNA IMPRESORA CONFIGURADA,
+   *    INTENTAMOS DETECTAR UNA COMANDERA AUTOMÁTICAMENTE
+   */
+  if (!nombreImpresora) {
+    const impresorasVirtuales = [
+      "microsoft print to pdf",
+      "microsoft xps",
+      "onenote",
+      "fax",
+      "qz_tray raw print",
+      "qz tray raw print",
+    ];
+
+    const palabrasComandera = [
+      "pos",
+      "thermal",
+      "ticket",
+      "receipt",
+      "slk",
+      "xprinter",
+      "xp-",
+      "epson tm",
+      "tm-t",
+      "bematech",
+      "elgin",
+      "gprinter",
+      "generic / text only",
+    ];
+
+    const candidatas = impresoras.filter((nombre) => {
+      const nombreNormalizado = normalizar(nombre);
+
+      const esVirtual = impresorasVirtuales.some((virtual) =>
+        nombreNormalizado.includes(virtual),
+      );
+
+      if (esVirtual) {
+        return false;
+      }
+
+      return palabrasComandera.some((palabra) =>
+        nombreNormalizado.includes(palabra),
+      );
+    });
+
+    console.log("Comanderas detectadas:", candidatas);
+
+    /*
+     * Si encontramos una sola, la usamos.
+     */
+    if (candidatas.length === 1) {
+      nombreImpresora = candidatas[0];
+    }
+
+    /*
+     * Si encontramos varias, no elegimos al azar.
+     */
+    if (candidatas.length > 1) {
+      throw new Error(
+        "Se encontraron varias impresoras térmicas. Seleccioná la comandera desde Configuración.",
+      );
+    }
+  }
+
+  /*
+   * 3. SI NO HAY NINGUNA CONFIGURADA NI PUDIMOS
+   *    DETECTAR UNA AUTOMÁTICAMENTE
    */
   if (!nombreImpresora) {
     throw new Error(
-      `La impresora configurada "${impresoraGuardada}" no está disponible en esta PC. Revisá Configuración.`,
+      "No se encontró una impresora térmica. Seleccioná una desde Configuración.",
     );
   }
 
-  console.log(
-    "Usando impresora configurada:",
-    nombreImpresora,
-  );
-}
+  console.log("Imprimiendo ticket en:", nombreImpresora);
 
-/*
- * 2. SI TODAVÍA NO HAY UNA IMPRESORA CONFIGURADA,
- *    INTENTAMOS DETECTAR UNA COMANDERA AUTOMÁTICAMENTE
- */
-if (!nombreImpresora) {
-  const impresorasVirtuales = [
-    "microsoft print to pdf",
-    "microsoft xps",
-    "onenote",
-    "fax",
-    "qz_tray raw print",
-    "qz tray raw print",
-  ];
-
-  const palabrasComandera = [
-    "pos",
-    "thermal",
-    "ticket",
-    "receipt",
-    "slk",
-    "xprinter",
-    "xp-",
-    "epson tm",
-    "tm-t",
-    "bematech",
-    "elgin",
-    "gprinter",
-    "generic / text only",
-  ];
-
-  const candidatas = impresoras.filter((nombre) => {
-    const nombreNormalizado = normalizar(nombre);
-
-    const esVirtual = impresorasVirtuales.some((virtual) =>
-      nombreNormalizado.includes(virtual),
-    );
-
-    if (esVirtual) {
-      return false;
-    }
-
-    return palabrasComandera.some((palabra) =>
-      nombreNormalizado.includes(palabra),
-    );
+  /*
+   * CONFIGURACIÓN QZ TRAY
+   */
+  const config = qz.configs.create(nombreImpresora, {
+    encoding: "CP850",
+    copies: 1,
   });
 
-  console.log("Comanderas detectadas:", candidatas);
-
-  /*
-   * Si encontramos una sola, la usamos.
-   */
-  if (candidatas.length === 1) {
-    nombreImpresora = candidatas[0];
-  }
-
-  /*
-   * Si encontramos varias, no elegimos al azar.
-   */
-  if (candidatas.length > 1) {
-    throw new Error(
-      "Se encontraron varias impresoras térmicas. Seleccioná la comandera desde Configuración.",
-    );
-  }
-}
-
-/*
- * 3. SI NO HAY NINGUNA CONFIGURADA NI PUDIMOS
- *    DETECTAR UNA AUTOMÁTICAMENTE
- */
-if (!nombreImpresora) {
-  throw new Error(
-    "No se encontró una impresora térmica. Seleccioná una desde Configuración.",
-  );
-}
-
-console.log("Imprimiendo ticket en:", nombreImpresora);
-
-/*
- * CONFIGURACIÓN QZ TRAY
- */
-const config = qz.configs.create(nombreImpresora, {
-  encoding: "CP850",
-  copies: 1,
-});
-  
   const nombreFantasia = String(empresa.nombre_fantasia ?? "").trim();
 
   const razonSocial =
@@ -547,15 +541,29 @@ const config = qz.configs.create(nombreImpresora, {
    * DETALLE
    */
   detalle.forEach((item) => {
-    const cantidad = formatearNumero(item.cantidad);
-    const precio = formatearNumero(item.precio);
-    const subtotal = formatearNumero(item.subtotal);
+    const cantidadNumero = Number(item.cantidad || 0);
+    const precioOriginal = Number(item.precio || 0);
+    const subtotalOriginal = Number(item.subtotal || 0);
+
+    const esFacturaA =
+      datos.tipoComprobante === "factura" &&
+      String(datos.letraComprobante || "").toUpperCase() === "A";
+
+    const precioMostrar = esFacturaA ? precioOriginal / 1.21 : precioOriginal;
+
+    const subtotalMostrar = esFacturaA
+      ? subtotalOriginal / 1.21
+      : subtotalOriginal;
+
+    const cantidad = formatearNumero(cantidadNumero);
+    const precio = formatearNumero(precioMostrar);
+    const subtotal = formatearNumero(subtotalMostrar);
 
     datosImpresion.push(
       texto(dosColumnas(`${cantidad} u x ${precio}`, subtotal)),
     );
 
-    datosImpresion.push(texto(`${cortar(item.descripcion || "")}\n`));
+    datosImpresion.push(texto(` ${cortar(item.descripcion || "")}\n`));
   });
 
   datosImpresion.push(texto(linea()));

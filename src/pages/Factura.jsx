@@ -915,6 +915,43 @@ export default function Factura() {
           );
         }
       }
+      // Registrar ingreso en Caja si la factura es CONTADO
+      if (
+        tipoComprobante === "factura" &&
+        formaPago?.toLowerCase() === "contado"
+      ) {
+        const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+        const { error: errorCaja } = await supabase
+          .from("movimientos_caja")
+          .insert([
+            {
+              idempresa: idEmpresa,
+              idusuario: usuarioGuardado.id,
+              fecha: fecha,
+              tipo: "ingreso",
+              origen: "factura",
+              id_origen: facturaId,
+              numero_comprobante: `${String(
+                respuestaFiscal.afip.puntoVenta,
+              ).padStart(4, "0")}-${String(
+                respuestaFiscal.afip.numeroFiscal,
+              ).padStart(8, "0")}`,
+              concepto: "Factura contado",
+              medio_pago: facturaNueva.medio_pago || formaPago,
+              importe: totalCalc,
+            },
+          ]);
+
+        if (errorCaja) {
+          console.error("Error al registrar movimiento de Caja:", errorCaja);
+
+          mostrarNotificacion(
+            "La factura se generó correctamente, pero no se pudo registrar en Caja",
+            "warning",
+          );
+        }
+      }
 
       setNumeroFactura(numeroGenerado);
 
