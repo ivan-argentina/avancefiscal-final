@@ -605,6 +605,33 @@ export default function ResumenProveedores() {
           throw errorCompra;
         }
       }
+      /*
+       * REGISTRAR PAGO EN CAJA
+       */
+      const { error: errorCaja } = await supabase
+        .from("movimientos_caja")
+        .insert([
+          {
+            idempresa: idEmpresa,
+            idusuario: usuarioGuardado.id,
+            fecha: new Date().toISOString().split("T")[0],
+            tipo: "egreso",
+            origen: "pago_proveedor",
+            id_origen: pagoCreado.id,
+            numero_comprobante: `PAG-${pagoCreado.id}`,
+            concepto: "Pago a proveedor",
+            medio_pago: formaPago,
+            importe: recibido,
+          },
+        ]);
+
+      if (errorCaja) {
+        console.error(
+          "Error al registrar pago de proveedor en Caja:",
+          errorCaja,
+        );
+        throw errorCaja;
+      }
 
       /*
        * RECARGAR INFORMACIÓN

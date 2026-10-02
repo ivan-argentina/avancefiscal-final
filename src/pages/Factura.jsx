@@ -778,77 +778,83 @@ export default function Factura() {
       }
 
       //Factura Electronica
-      const responseFiscal = await fetch(`${API_URL}/api/fiscal/autorizar`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idFactura: facturaId,
-        }),
-      });
+      let responseFiscal;
+      let respuestaFiscal;
+      if (tipoComprobante !== "remito") {
+        responseFiscal = await fetch(`${API_URL}/api/fiscal/autorizar`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            idFactura: facturaId,
+          }),
+        });
 
-      const respuestaFiscal = await responseFiscal.json();
+        respuestaFiscal = await responseFiscal.json();
 
-      if (!respuestaFiscal.ok) {
-        alert(
-          respuestaFiscal.mensaje || respuestaFiscal.error || "Error fiscal",
-        );
-        return;
-      }
+        if (!respuestaFiscal.ok) {
+          alert(
+            respuestaFiscal.mensaje || respuestaFiscal.error || "Error fiscal",
+          );
+          return;
+        }
 
-      const letraFiscal = respuestaFiscal.factura.letra_comprobante;
+        const letraFiscal = respuestaFiscal.factura.letra_comprobante;
 
-      const esConIva = letraFiscal === "A" || letraFiscal === "B";
+        const esConIva = letraFiscal === "A" || letraFiscal === "B";
 
-      const neto = esConIva ? Number((totalCalc / 1.21).toFixed(2)) : totalCalc;
+        const neto = esConIva
+          ? Number((totalCalc / 1.21).toFixed(2))
+          : totalCalc;
 
-      const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
+        const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
-      const empresaPdf = empresa || respuestaFiscal.factura.empresas;
+        const empresaPdf = empresa || respuestaFiscal.factura.empresas;
 
-      const { data: empresaCompleta, error: errorEmpresa } = await supabase
-        .from("empresas")
-        .select(
-          `
+        const { data: empresaCompleta, error: errorEmpresa } = await supabase
+          .from("empresas")
+          .select(
+            `
     *,
     ciudades!empresas_idciudad_fkey(nombre)
   `,
-        )
-        .eq("id", idEmpresa)
-        .single();
+          )
+          .eq("id", idEmpresa)
+          .single();
 
-      if (errorEmpresa) {
-        console.error("Error cargando empresa completa:", errorEmpresa);
+        if (errorEmpresa) {
+          console.error("Error cargando empresa completa:", errorEmpresa);
+        }
+        const datosPdfFiscal = {
+          empresa: {
+            ...empresaCompleta,
+            localidad: empresaCompleta?.ciudades?.nombre || "-",
+          },
+          tipoImpresion: empresaCompleta?.tipo_impresion || "laser",
+          numeroFactura: respuestaFiscal.afip.numeroFiscal,
+          fecha: respuestaFiscal.factura.fecha,
+          tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
+          letraComprobante:
+            empresaCompleta?.condicion_iva === "Monotributista"
+              ? "C"
+              : respuestaFiscal.factura.letra_comprobante,
+          formaPago: respuestaFiscal.factura.forma_pago,
+          clienteSeleccionado,
+          detalle,
+          totalFactura: totalCalc,
+          neto,
+          iva,
+          observaciones,
+          puntoVenta: respuestaFiscal.afip.puntoVenta,
+          cae: respuestaFiscal.afip.cae,
+          vencimientoCae: respuestaFiscal.afip.caeVto,
+          numeroOrigen: numeroFacturaOrigen,
+        };
+
+        setPdfData(datosPdfFiscal);
+        setGenerarPdfPendiente(true);
       }
-      const datosPdfFiscal = {
-        empresa: {
-          ...empresaCompleta,
-          localidad: empresaCompleta?.ciudades?.nombre || "-",
-        },
-        tipoImpresion: empresaCompleta?.tipo_impresion || "laser",
-        numeroFactura: respuestaFiscal.afip.numeroFiscal,
-        fecha: respuestaFiscal.factura.fecha,
-        tipoComprobante: respuestaFiscal.factura.tipo_comprobante,
-        letraComprobante:
-          empresaCompleta?.condicion_iva === "Monotributista"
-            ? "C"
-            : respuestaFiscal.factura.letra_comprobante,
-        formaPago: respuestaFiscal.factura.forma_pago,
-        clienteSeleccionado,
-        detalle,
-        totalFactura: totalCalc,
-        neto,
-        iva,
-        observaciones,
-        puntoVenta: respuestaFiscal.afip.puntoVenta,
-        cae: respuestaFiscal.afip.cae,
-        vencimientoCae: respuestaFiscal.afip.caeVto,
-        numeroOrigen: numeroFacturaOrigen,
-      };
-
-      setPdfData(datosPdfFiscal);
-      setGenerarPdfPendiente(true);
 
       await supabase
         .from("empresas")
@@ -915,12 +921,14 @@ export default function Factura() {
           );
         }
       }
-      // Registrar ingreso en Caja si la factura es CONTADO
-      if (
-        tipoComprobante === "factura" &&
-        formaPago?.toLowerCase() === "contado"
-      ) {
+
+      // Registrar la venta en Caja
+      // Contado = ingreso real
+      // Cuenta corriente = movimiento informativo
+      if (tipoComprobante === "factura" || tipoComprobante === "remito") {
         const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
+
+        const esContado = formaPago?.toLowerCase() === "contado";
 
         const { error: errorCaja } = await supabase
           .from("movimientos_caja")
@@ -929,16 +937,26 @@ export default function Factura() {
               idempresa: idEmpresa,
               idusuario: usuarioGuardado.id,
               fecha: fecha,
-              tipo: "ingreso",
-              origen: "factura",
+              tipo: esContado ? "ingreso" : "informativo",
+              origen: tipoComprobante === "remito" ? "remito" : "factura",
               id_origen: facturaId,
-              numero_comprobante: `${String(
-                respuestaFiscal.afip.puntoVenta,
-              ).padStart(4, "0")}-${String(
-                respuestaFiscal.afip.numeroFiscal,
-              ).padStart(8, "0")}`,
-              concepto: "Factura contado",
-              medio_pago: facturaNueva.medio_pago || formaPago,
+              numero_comprobante:
+                tipoComprobante === "remito"
+                  ? String(numeroComprobante)
+                  : `${String(respuestaFiscal.afip.puntoVenta).padStart(4, "0")}-${String(
+                      respuestaFiscal.afip.numeroFiscal,
+                    ).padStart(8, "0")}`,
+              concepto:
+                tipoComprobante === "remito"
+                  ? esContado
+                    ? "Remito contado"
+                    : "Remito cuenta corriente"
+                  : esContado
+                    ? "Factura contado"
+                    : "Factura cuenta corriente",
+              medio_pago: esContado
+                ? facturaNueva.medio_pago || formaPago
+                : "Cuenta corriente",
               importe: totalCalc,
             },
           ]);
@@ -955,20 +973,27 @@ export default function Factura() {
 
       setNumeroFactura(numeroGenerado);
 
-      const datosPdfRemito = {
-        numeroFactura: respuestaFiscal.afip.numeroFiscal,
-        fecha,
-        tipoComprobante,
-        letraComprobante: "C",
-        formaPago,
-        clienteSeleccionado,
-        detalle,
-        totalFactura: totalCalc,
-        observaciones,
-        puntoVenta: respuestaFiscal.afip.puntoVenta,
-        cae: respuestaFiscal.afip.cae,
-        vencimientoCae: respuestaFiscal.afip.caeVto,
-      };
+      if (tipoComprobante === "remito") {
+        const datosPdfRemito = {
+          empresa,
+          numeroFactura: numeroComprobante,
+          fecha,
+          tipoComprobante: "remito",
+          letraComprobante: "",
+          formaPago,
+          clienteSeleccionado,
+          detalle,
+          totalFactura: totalCalc,
+          observaciones,
+          puntoVenta: null,
+          cae: null,
+          vencimientoCae: null,
+        };
+
+        setPdfData(datosPdfRemito);
+        setGenerarPdfPendiente(true);
+      }
+
       limpiarFormulario();
     } catch (error) {
       console.error(error);
@@ -1225,8 +1250,9 @@ export default function Factura() {
               onChange={(e) => setTipoComprobante(e.target.value)}
             >
               <MenuItem value="factura">Factura</MenuItem>
-              <MenuItem value="nota_de_credito">Nota de crédito</MenuItem>
+              <MenuItem value="remito">Remito</MenuItem>
               <MenuItem value="presupuesto">Presupuesto</MenuItem>
+              <MenuItem value="nota_de_credito">Nota de crédito</MenuItem>
             </TextField>
           </Grid>
           {tipoComprobante === "presupuesto" && (

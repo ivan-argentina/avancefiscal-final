@@ -383,6 +383,31 @@ export default function Compra() {
         }
       }
 
+      // Registrar la compra en Caja
+      const esContado = formaPago?.toLowerCase() === "contado";
+
+      const { error: errorCaja } = await supabase
+        .from("movimientos_caja")
+        .insert([
+          {
+            idempresa: idEmpresa,
+            idusuario: usuarioGuardado.id,
+            fecha: fecha,
+            tipo: esContado ? "egreso" : "informativo",
+            origen: "compra",
+            id_origen: compraGuardada.id,
+            numero_comprobante: numeroComprobante,
+            concepto: esContado ? "Compra contado" : "Compra cuenta corriente",
+            medio_pago: esContado ? medioPago : "Cuenta corriente",
+            importe: totalCompra,
+          },
+        ]);
+
+      if (errorCaja) {
+        console.error("Error al registrar compra en Caja:", errorCaja);
+        throw errorCaja;
+      }
+
       setProveedorId("");
       setProveedorSeleccionado(null);
       setFormaPago("Contado");

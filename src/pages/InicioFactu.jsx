@@ -311,7 +311,7 @@ export default function InicioFactu() {
             </ListItemButton>
           ))}
 
-          {/* Caja 
+          {/* Caja */}
           <ListItemButton
             component={Link}
             to="/caja"
@@ -325,7 +325,7 @@ export default function InicioFactu() {
             }}
           >
             <ListItemText primary="Caja" />
-          </ListItemButton>*/}
+          </ListItemButton>
 
           {/* Proveedores */}
           <ListItemButton

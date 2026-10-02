@@ -529,6 +529,28 @@ export default function ResumenClientes() {
         }
       }
 
+      // Registrar el cobro del cliente en Caja
+      const { error: errorCaja } = await supabase
+        .from("movimientos_caja")
+        .insert([
+          {
+            idempresa: idEmpresa,
+            idusuario: usuarioGuardado.id,
+            fecha: new Date().toISOString().split("T")[0],
+            tipo: "ingreso",
+            origen: "recibo",
+            id_origen: pagoCreado.id,
+            numero_comprobante: `REC-${pagoCreado.id}`,
+            concepto: "Cobro de cliente",
+            medio_pago: formaPago,
+            importe: recibido,
+          },
+        ]);
+
+      if (errorCaja) {
+        console.error("Error al registrar cobro en Caja:", errorCaja);
+        throw errorCaja;
+      }
       await Promise.all([
         cargarFacturasPendientes(clienteId),
         cargarPagos(clienteId),
