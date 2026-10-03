@@ -366,8 +366,15 @@ export default function Caja() {
       </Box>
 
       {/* Movimientos */}
-      <TableContainer component={Paper}>
-        <Table>
+      <TableContainer
+        component={Paper}
+        sx={{
+          maxHeight: 500,
+          overflowY: "auto",
+          overflowX: "auto",
+        }}
+      >
+        <Table stickyHeader>
           <TableHead>
             <TableRow>
               <TableCell>Fecha</TableCell>

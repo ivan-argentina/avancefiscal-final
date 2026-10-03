@@ -571,13 +571,26 @@ export async function imprimirTicketFactura(datos) {
   /*
    * TOTALES
    */
+  if ( datos.tipoComprobante !== "remito" &&
+       String(datos.letraComprobante || "").toUpperCase() !== "C") {
   datosImpresion.push(
-    texto(dosColumnas("Subt. Imp. NETO GRAVADO", formatearNumero(datos.neto))),
+    texto(
+      dosColumnas(
+        "Subt. Imp. NETO GRAVADO",
+        formatearNumero(datos.neto),
+      ),
+    ),
   );
 
   datosImpresion.push(
-    texto(dosColumnas("ALICUOTA 21.00%", formatearNumero(datos.iva))),
+    texto(
+      dosColumnas(
+        "ALICUOTA 21.00%",
+        formatearNumero(datos.iva),
+      ),
+    ),
   );
+}
 
   datosImpresion.push(comando(CMD_DOBLE_ALTO));
 

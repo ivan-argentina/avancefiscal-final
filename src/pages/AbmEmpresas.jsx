@@ -201,7 +201,7 @@ export default function AbmEmpresas() {
           throw new Error("El logo debe ser JPG, PNG o WEBP");
         }
 
-        const rutaLogo = `${cuitLimpio}/logo.${extension}`;
+        const rutaLogo = `${cuitLimpio}/logo-${Date.now()}.${extension}`;
 
         const { error: errorLogo } = await supabase.storage
           .from("logos")

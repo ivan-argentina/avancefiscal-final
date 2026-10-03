@@ -976,6 +976,7 @@ export default function Factura() {
       if (tipoComprobante === "remito") {
         const datosPdfRemito = {
           empresa,
+          tipoImpresion: empresa?.tipo_impresion || "laser",
           numeroFactura: numeroComprobante,
           fecha,
           tipoComprobante: "remito",
