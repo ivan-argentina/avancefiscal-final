@@ -351,6 +351,7 @@ export default function Facturas() {
       nombre: item.descripcion || item?.articulos?.descripcion || "-",
       cantidad: item.cantidad,
       precio: item.precio,
+      alicuota_iva: Number(item.alicuota_iva ?? 21),
       subtotal: item.subtotal,
     }));
 
@@ -408,6 +409,7 @@ export default function Facturas() {
         idarticulo,
         cantidad,
         precio,
+        alicuota_iva,
         subtotal,
         descripcion,
         articulos(descripcion)
@@ -433,6 +435,7 @@ export default function Facturas() {
           nombre: descripcion,
           cantidad: Number(item.cantidad || 0),
           precio: Number(item.precio || 0),
+          alicuota_iva: Number(item.alicuota_iva ?? 21),
           subtotal: Number(item.subtotal || 0),
         };
       });
@@ -595,6 +598,42 @@ export default function Facturas() {
         ? Number((totalFactura - totalFactura / 1.21).toFixed(2))
         : 0;
 
+      const desgloseIva =
+        factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
+          ? Object.values(
+              detalleFormateado.reduce((acc, item) => {
+                const alicuota = Number(item.alicuota_iva ?? 21);
+                const subtotal = Number(item.subtotal || 0);
+                const divisor = 1 + alicuota / 100;
+
+                const baseImp =
+                  alicuota > 0
+                    ? Number((subtotal / divisor).toFixed(2))
+                    : subtotal;
+
+                const importe =
+                  alicuota > 0 ? Number((subtotal - baseImp).toFixed(2)) : 0;
+
+                if (!acc[alicuota]) {
+                  acc[alicuota] = {
+                    alicuota,
+                    baseImp: 0,
+                    importe: 0,
+                  };
+                }
+
+                acc[alicuota].baseImp += baseImp;
+                acc[alicuota].importe += importe;
+
+                return acc;
+              }, {}),
+            ).map((item) => ({
+              ...item,
+              baseImp: Number(item.baseImp.toFixed(2)),
+              importe: Number(item.importe.toFixed(2)),
+            }))
+          : [];
+
       setPdfData({
         empresa: empresaFormateada,
 
@@ -617,6 +656,8 @@ export default function Facturas() {
         neto,
 
         iva,
+
+        desgloseIva,
 
         observaciones: factura.observaciones,
 
@@ -1328,6 +1369,7 @@ export default function Facturas() {
           totalFactura={pdfData.totalFactura}
           neto={pdfData.neto}
           iva={pdfData.iva}
+          desgloseIva={pdfData.desgloseIva}
           observaciones={pdfData.observaciones}
           cae={pdfData.cae}
           vencimientoCae={pdfData.vencimientoCae}

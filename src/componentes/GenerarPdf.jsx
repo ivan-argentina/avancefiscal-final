@@ -445,6 +445,7 @@ const GenerarPdf = forwardRef(
                 <TableCell>Producto / Servicio</TableCell>
                 <TableCell align="right">Cantidad</TableCell>
                 <TableCell align="right">Precio Unit.</TableCell>
+                <TableCell align="right">IVA</TableCell>
                 <TableCell align="right">Descuento</TableCell>
                 <TableCell align="right">Subtotal</TableCell>
               </TableRow>
@@ -458,12 +459,14 @@ const GenerarPdf = forwardRef(
 
                 // En Factura A el detalle debe mostrarse sin IVA
                 const esFacturaA = letraComprobante === "A";
+                const alicuota = Number(item.alicuota_iva ?? 21);
+                const divisorIva = 1 + alicuota / 100;
 
-                const precioMostrar = esFacturaA ? precio / 1.21 : precio;
+                const precioMostrar = esFacturaA ? precio / divisorIva : precio;
 
                 const subtotalOriginal = Number(item.subtotal || 0);
                 const subtotalMostrar = esFacturaA
-                  ? subtotalOriginal / 1.21
+                  ? subtotalOriginal / divisorIva
                   : subtotalOriginal;
 
                 const bruto = cantidad * precioMostrar;
@@ -484,6 +487,9 @@ const GenerarPdf = forwardRef(
                     <TableCell align="right">
                       $ {formatoMoneda(precioMostrar)}
                     </TableCell>
+                    <TableCell align="right">
+                      {String(alicuota).replace(".", ",")}%
+                    </TableCell>
 
                     <TableCell align="right">
                       {porcentaje > 0
@@ -500,7 +506,7 @@ const GenerarPdf = forwardRef(
 
               {detalle.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} align="center">
+                  <TableCell colSpan={6} align="center">
                     Sin artículos cargados
                   </TableCell>
                 </TableRow>
