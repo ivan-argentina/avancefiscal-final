@@ -50,6 +50,7 @@ export default function AbmArticulos() {
   const [codigo, setCodigo] = useState("");
   const [precioCosto, setPrecioCosto] = useState("");
   const [precio, setPrecio] = useState("");
+  const [alicuotaIva, setAlicuotaIva] = useState("21");
   const [margen, setMargen] = useState("");
   const [familiaId, setFamiliaId] = useState("");
   const [stock, setStock] = useState("");
@@ -272,6 +273,7 @@ export default function AbmArticulos() {
       setCodigo(data.codigo ?? "");
       setNombre(data.descripcion ?? "");
       setPrecio(data.precio ?? "");
+      setAlicuotaIva(String(data.alicuota_iva ?? 21));
       setPrecioCosto(data.precio_costo ?? "");
       setStock(data.stock ?? "");
       setStockMinimo(data.stock_minimo ?? "");
@@ -645,6 +647,7 @@ export default function AbmArticulos() {
       codigo: codigoFinal,
       descripcion: nombre.trim(),
       precio: Number(precio) || 0,
+      alicuota_iva: Number(alicuotaIva) || 21,
       stock: Number(stock) || 0,
       stock_minimo: Number(stockMinimo) || 0,
       idfamilia: familiaId || null,
@@ -1030,8 +1033,24 @@ export default function AbmArticulos() {
                 size="small"
               />
             </Grid>
+            <Grid size={{ xs: 12, md: 3 }}>
+              <TextField
+                select
+                label="Alícuota IVA"
+                fullWidth
+                size="small"
+                value={alicuotaIva}
+                onChange={(e) => setAlicuotaIva(e.target.value)}
+              >
+                <MenuItem value="0">0%</MenuItem>
+                <MenuItem value="10.5">10,5%</MenuItem>
+                <MenuItem value="21">21%</MenuItem>
+                <MenuItem value="27">27%</MenuItem>
+              </TextField>
+            </Grid>
+
             {/*Fila 3*/}
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <TextField
                 select
                 label="Familia"
@@ -1048,7 +1067,7 @@ export default function AbmArticulos() {
               </TextField>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <Button
                 component="label"
                 variant="outlined"
@@ -1071,7 +1090,7 @@ export default function AbmArticulos() {
               </Button>
             </Grid>
 
-            <Grid size={{ xs: 12, md: 4 }}>
+            <Grid size={{ xs: 12, md: 3 }}>
               <Box
                 sx={{
                   display: "flex",

@@ -109,6 +109,7 @@ export const autorizarFactura = async ({
   total,
   neto = total,
   iva = 0,
+  alicuotasIva = [],
   docTipo,
   docNro,
   tipoComprobante = "factura",
@@ -206,27 +207,18 @@ export const autorizarFactura = async ({
   const esFacturaConIva = letraComprobante === "A" || letraComprobante === "B";
 
   const totalFinal = Number(total || 0);
+  const netoFinal = esFacturaConIva ? Number(neto || 0) : totalFinal;
 
-  const netoFinal = esFacturaConIva
-    ? Number((totalFinal / 1.21).toFixed(2))
-    : totalFinal;
+  const ivaFinal = esFacturaConIva ? Number(iva || 0) : 0;
 
-  const ivaFinal = esFacturaConIva
-    ? Number((totalFinal - netoFinal).toFixed(2))
-    : 0;
-
-  const datosIva = esFacturaConIva
-    ? {
-        Iva: {
-          AlicIva: {
-            Id: 5,
-            BaseImp: netoFinal,
-            Importe: ivaFinal,
+  const datosIva =
+    esFacturaConIva && alicuotasIva.length > 0
+      ? {
+          Iva: {
+            AlicIva: alicuotasIva.length === 1 ? alicuotasIva[0] : alicuotasIva,
           },
-        },
-      }
-    : {};
-
+        }
+      : {};
   console.log(
     "ENVIANDO A ARCA:",
     JSON.stringify(

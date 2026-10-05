@@ -571,26 +571,34 @@ export async function imprimirTicketFactura(datos) {
   /*
    * TOTALES
    */
-  if ( datos.tipoComprobante !== "remito" &&
-       String(datos.letraComprobante || "").toUpperCase() !== "C") {
-  datosImpresion.push(
-    texto(
-      dosColumnas(
-        "Subt. Imp. NETO GRAVADO",
-        formatearNumero(datos.neto),
+  if (
+    datos.tipoComprobante !== "remito" &&
+    String(datos.letraComprobante || "").toUpperCase() !== "C"
+  ) {
+    datosImpresion.push(
+      texto(
+        dosColumnas("Subt. Imp. NETO GRAVADO", formatearNumero(datos.neto)),
       ),
-    ),
-  );
+    );
 
-  datosImpresion.push(
-    texto(
-      dosColumnas(
-        "ALICUOTA 21.00%",
-        formatearNumero(datos.iva),
-      ),
-    ),
-  );
-}
+    const desgloseIva = Array.isArray(datos.desgloseIva)
+      ? datos.desgloseIva
+      : [];
+
+    desgloseIva.forEach((item) => {
+      datosImpresion.push(
+        texto(
+          dosColumnas(
+            `ALICUOTA ${Number(item.alicuota).toLocaleString("es-AR", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}%`,
+            formatearNumero(item.importe),
+          ),
+        ),
+      );
+    });
+  }
 
   datosImpresion.push(comando(CMD_DOBLE_ALTO));
 

@@ -390,6 +390,7 @@ export default function Factura() {
       descripcion: item.articulos?.descripcion || item.descripcion || "",
       cantidad: item.cantidad,
       precio: item.precio,
+      alicuota_iva: Number(item.alicuota_iva ?? 21),
       subtotal: item.subtotal,
     }));
 
@@ -485,6 +486,7 @@ export default function Factura() {
       descripcion: art.descripcion,
       cantidad: Number(cantidad),
       precio: Number(precio),
+      alicuota_iva: Number(art.alicuota_iva ?? 21),
       descuento_porcentaje: descuentoAplicado,
       subtotal: subtotalConDescuento,
       imagen_url: art.imagen_url || "",
@@ -712,6 +714,7 @@ export default function Factura() {
         descripcion: item.descripcion || item.articulo || "",
         cantidad: Number(item.cantidad),
         precio: Number(item.precio),
+        alicuota_iva: Number(item.alicuota_iva ?? 21),
         descuento_porcentaje: Number(item.descuento_porcentaje) || 0,
         subtotal: Number(item.subtotal),
         idempresa: idEmpresa,
@@ -805,8 +808,46 @@ export default function Factura() {
         const esConIva = letraFiscal === "A" || letraFiscal === "B";
 
         const neto = esConIva
-          ? Number((totalCalc / 1.21).toFixed(2))
+          ? Number(
+              detalle
+                .reduce((acc, item) => {
+                  const alicuota = Number(item.alicuota_iva ?? 21);
+                  const subtotal = Number(item.subtotal || 0);
+
+                  return acc + subtotal / (1 + alicuota / 100);
+                }, 0)
+                .toFixed(2),
+            )
           : totalCalc;
+
+        const desgloseIva = esConIva
+          ? Object.values(
+              detalle.reduce((acc, item) => {
+                const alicuota = Number(item.alicuota_iva ?? 21);
+                const subtotal = Number(item.subtotal || 0);
+
+                const baseImp = subtotal / (1 + alicuota / 100);
+                const importeIva = subtotal - baseImp;
+
+                if (!acc[alicuota]) {
+                  acc[alicuota] = {
+                    alicuota,
+                    baseImp: 0,
+                    importe: 0,
+                  };
+                }
+
+                acc[alicuota].baseImp += baseImp;
+                acc[alicuota].importe += importeIva;
+
+                return acc;
+              }, {}),
+            ).map((item) => ({
+              ...item,
+              baseImp: Number(item.baseImp.toFixed(2)),
+              importe: Number(item.importe.toFixed(2)),
+            }))
+          : [];
 
         const iva = esConIva ? Number((totalCalc - neto).toFixed(2)) : 0;
 
@@ -845,6 +886,7 @@ export default function Factura() {
           totalFactura: totalCalc,
           neto,
           iva,
+          desgloseIva,
           observaciones,
           puntoVenta: respuestaFiscal.afip.puntoVenta,
           cae: respuestaFiscal.afip.cae,
@@ -1676,6 +1718,7 @@ export default function Factura() {
           totalFactura={pdfData.totalFactura}
           neto={pdfData.neto}
           iva={pdfData.iva}
+          desgloseIva={pdfData.desgloseIva}
           observaciones={pdfData.observaciones}
           validezDias={pdfData.validezDias}
           puntoVenta={pdfData.puntoVenta}

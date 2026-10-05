@@ -31,6 +31,7 @@ const GenerarPdf = forwardRef(
       totalFactura,
       neto,
       iva,
+      desgloseIva = [],
       cae = "00000000000000",
       vencimientoCae = "__/__/____",
       numeroOrigen,
@@ -702,29 +703,37 @@ const GenerarPdf = forwardRef(
                     </Typography>
                   </Box>
 
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      p: 0.8,
-                      borderBottom: "1px solid #000",
-                    }}
-                  >
-                    <Typography sx={{ fontSize: 12.5, flex: 1 }}>
-                      IVA 21%:
-                    </Typography>
-
-                    <Typography
+                  {desgloseIva.map((item) => (
+                    <Box
+                      key={item.alicuota}
                       sx={{
-                        fontSize: 12.5,
-                        minWidth: 110,
-                        textAlign: "right",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        p: 0.8,
+                        borderBottom: "1px solid #000",
                       }}
                     >
-                      $ {formatoMoneda(iva)}
-                    </Typography>
-                  </Box>
+                      <Typography sx={{ fontSize: 12.5, flex: 1 }}>
+                        IVA{" "}
+                        {Number(item.alicuota).toLocaleString("es-AR", {
+                          minimumFractionDigits: 1,
+                          maximumFractionDigits: 2,
+                        })}
+                        %:
+                      </Typography>
+
+                      <Typography
+                        sx={{
+                          fontSize: 12.5,
+                          minWidth: 110,
+                          textAlign: "right",
+                        }}
+                      >
+                        $ {formatoMoneda(item.importe)}
+                      </Typography>
+                    </Box>
+                  ))}
 
                   <Box
                     sx={{

@@ -859,11 +859,59 @@ app.post("/api/fiscal/autorizar", async (req, res) => {
         docNro = Number(cuitCliente);
       }
     }
+    const mapaIvaArca = {
+      0: 3,
+      10.5: 4,
+      21: 5,
+      27: 6,
+    };
 
+    const gruposIva = {};
+
+    for (const item of data.detalle_factura || []) {
+      const alicuota = Number(item.alicuota_iva ?? 21);
+      const totalItem = Number(item.subtotal || 0);
+
+      const divisor = 1 + alicuota / 100;
+
+      const baseImp =
+        alicuota > 0 ? Number((totalItem / divisor).toFixed(2)) : totalItem;
+
+      const importe =
+        alicuota > 0 ? Number((totalItem - baseImp).toFixed(2)) : 0;
+
+      if (!gruposIva[alicuota]) {
+        gruposIva[alicuota] = {
+          Id: mapaIvaArca[alicuota],
+          BaseImp: 0,
+          Importe: 0,
+        };
+      }
+
+      gruposIva[alicuota].BaseImp += baseImp;
+      gruposIva[alicuota].Importe += importe;
+    }
+
+    const alicuotasIva = Object.values(gruposIva).map((item) => ({
+      ...item,
+      BaseImp: Number(item.BaseImp.toFixed(2)),
+      Importe: Number(item.Importe.toFixed(2)),
+    }));
+
+    const netoFiscal = Number(
+      alicuotasIva.reduce((acc, item) => acc + item.BaseImp, 0).toFixed(2),
+    );
+
+    const ivaFiscal = Number(
+      alicuotasIva.reduce((acc, item) => acc + item.Importe, 0).toFixed(2),
+    );
     const resultadoAfip = await autorizarFactura({
       cuit: cuitEmpresa,
       puntoVenta,
       total,
+      neto: netoFiscal,
+      iva: ivaFiscal,
+      alicuotasIva,
       docTipo,
       docNro,
       tipoComprobante: fiscal.comprobante.tipo_comprobante,
