@@ -492,13 +492,51 @@ export default function Facturas() {
           factura.letra_comprobante === "A" ||
           factura.letra_comprobante === "B";
 
-        const neto = esFacturaConIva
-          ? Number((totalFactura / 1.21).toFixed(2))
-          : totalFactura;
+        const desgloseIva = esFacturaConIva
+          ? Object.values(
+              detalleFormateado.reduce((acc, item) => {
+                const alicuota = Number(item.alicuota_iva ?? 21);
+                const subtotal = Number(item.subtotal || 0);
+                const divisor = 1 + alicuota / 100;
 
-        const iva = esFacturaConIva
-          ? Number((totalFactura - totalFactura / 1.21).toFixed(2))
-          : 0;
+                const baseImp =
+                  alicuota > 0
+                    ? Number((subtotal / divisor).toFixed(2))
+                    : subtotal;
+
+                const importe =
+                  alicuota > 0 ? Number((subtotal - baseImp).toFixed(2)) : 0;
+
+                if (!acc[alicuota]) {
+                  acc[alicuota] = {
+                    alicuota,
+                    baseImp: 0,
+                    importe: 0,
+                  };
+                }
+
+                acc[alicuota].baseImp += baseImp;
+                acc[alicuota].importe += importe;
+
+                return acc;
+              }, {}),
+            ).map((item) => ({
+              ...item,
+              baseImp: Number(item.baseImp.toFixed(2)),
+              importe: Number(item.importe.toFixed(2)),
+            }))
+          : [];
+        const neto = Number(
+          desgloseIva
+            .reduce((total, item) => total + Number(item.baseImp || 0), 0)
+            .toFixed(2),
+        );
+
+        const iva = Number(
+          desgloseIva
+            .reduce((total, item) => total + Number(item.importe || 0), 0)
+            .toFixed(2),
+        );
 
         const facturaTicket = {
           ...factura,
@@ -552,6 +590,7 @@ export default function Facturas() {
           subtotal: Number(factura.subtotal || neto),
           neto,
           iva,
+          desgloseIva,
 
           /*
            * Datos fiscales
@@ -586,17 +625,6 @@ export default function Facturas() {
        */
 
       const totalFactura = Number(factura.total || 0);
-
-      const esFacturaConIva =
-        factura.letra_comprobante === "A" || factura.letra_comprobante === "B";
-
-      const neto = esFacturaConIva
-        ? Number((totalFactura / 1.21).toFixed(2))
-        : totalFactura;
-
-      const iva = esFacturaConIva
-        ? Number((totalFactura - totalFactura / 1.21).toFixed(2))
-        : 0;
 
       const desgloseIva =
         factura.letra_comprobante === "A" || factura.letra_comprobante === "B"
