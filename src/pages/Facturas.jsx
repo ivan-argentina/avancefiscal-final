@@ -661,6 +661,17 @@ export default function Facturas() {
               importe: Number(item.importe.toFixed(2)),
             }))
           : [];
+      const neto = Number(
+        desgloseIva
+          .reduce((total, item) => total + Number(item.baseImp || 0), 0)
+          .toFixed(2),
+      );
+
+      const iva = Number(
+        desgloseIva
+          .reduce((total, item) => total + Number(item.importe || 0), 0)
+          .toFixed(2),
+      );
 
       setPdfData({
         empresa: empresaFormateada,
