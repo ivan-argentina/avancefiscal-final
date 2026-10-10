@@ -744,6 +744,84 @@ app.get("/api/fiscal/token", async (req, res) => {
     });
   }
 });
+
+app.get("/api/fiscal/verificar-conexion", async (req, res) => {
+  try {
+    // Obtener token de sesión
+    const authorization = String(req.headers.authorization || "");
+
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    if (!accessToken) {
+      return res.status(401).json({
+        ok: false,
+        error: "Sesión no válida.",
+      });
+    }
+
+    // Validar usuario con Supabase Auth
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabaseAuth.auth.getUser(accessToken);
+
+    if (authError || !authUser) {
+      return res.status(401).json({
+        ok: false,
+        error: "La sesión venció o no es válida.",
+      });
+    }
+
+    // Comprobar permisos de superadministrador
+    const { data: usuarioAdmin, error: errorAdmin } = await supabase
+      .from("usuarios")
+      .select("id, rol_global, activo")
+      .eq("auth_user_id", authUser.id)
+      .maybeSingle();
+
+    if (
+      errorAdmin ||
+      !usuarioAdmin ||
+      usuarioAdmin.rol_global !== "superadmin" ||
+      !usuarioAdmin.activo
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: "No tenés permiso para verificar conexiones ARCA.",
+      });
+    }
+
+    // Validar CUIT
+    const cuit = String(req.query.cuit || "").replace(/\D/g, "");
+
+    if (!/^\d{11}$/.test(cuit)) {
+      return res.status(400).json({
+        ok: false,
+        error: "CUIT inválido.",
+      });
+    }
+
+    // Solicitar autenticación a ARCA sin emitir comprobantes
+    await obtenerTokenSign(cuit);
+
+    return res.json({
+      ok: true,
+      mensaje: "Autenticación con ARCA exitosa.",
+      cuit,
+    });
+  } catch (error) {
+    console.error("Error verificando conexión ARCA:", error.message);
+
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudo autenticar con ARCA. Revisá los logs del servidor.",
+    });
+  }
+});
+
+
 app.get("/api/fiscal/ultimo", async (req, res) => {
   try {
     const resultado = await obtenerUltimoComprobante({
