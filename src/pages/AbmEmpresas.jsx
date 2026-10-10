@@ -31,6 +31,7 @@ export default function AbmEmpresas() {
   const [email, setEmail] = useState("");
   const [direccion, setDireccion] = useState("");
   const [editandoId, setEditandoId] = useState(null);
+  const [verificandoArca, setVerificandoArca] = useState(false);
   const [errorCuit, setErrorCuit] = useState("");
   const [condicionIva, setCondicionIva] = useState("");
   const [categoriaMonotributo, setCategoriaMonotributo] = useState("");
@@ -340,6 +341,53 @@ export default function AbmEmpresas() {
       );
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const verificarConexionArca = async () => {
+    if (!editandoId || !cuit) {
+      mostrarNotificacion("Primero seleccioná una empresa.", "error");
+      return;
+    }
+
+    setVerificandoArca(true);
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("La sesión no es válida.");
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        throw new Error("No está configurada la URL del backend.");
+      }
+
+      const respuesta = await fetch(
+        `${apiUrl.replace(/\/$/, "")}/api/fiscal/verificar-conexion?cuit=${encodeURIComponent(cuit)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok || !resultado.ok) {
+        throw new Error(resultado.error || "No se pudo verificar ARCA.");
+      }
+
+      mostrarNotificacion("Autenticación con ARCA exitosa.", "success");
+    } catch (error) {
+      mostrarNotificacion(error.message, "error");
+    } finally {
+      setVerificandoArca(false);
     }
   };
 
@@ -858,6 +906,15 @@ export default function AbmEmpresas() {
 
             <Button sx={{ ml: 1 }} onClick={limpiarFormulario}>
               Cancelar
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              sx={{ ml: 1 }}
+              onClick={verificarConexionArca}
+              disabled={!editandoId || verificandoArca || guardando}
+            >
+              {verificandoArca ? "Verificando ARCA..." : "Verificar ARCA"}
             </Button>
           </Grid>
         </Grid>
