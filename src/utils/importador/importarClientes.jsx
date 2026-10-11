@@ -74,7 +74,7 @@ export async function importarClientes(
         direccion: cliente.direccion || "",
         telefono: cliente.telefono || "",
         email: cliente.email || "",
-        cuit: cliente.cuit || "",
+        cuit: String(cliente.cuit ?? "").replace(/\D/g, ""),
         idciudad: idCiudad || null,
         idciva: mapaIva[cliente.idciva] ?? 3,
         idempresa: idEmpresa,
