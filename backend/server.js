@@ -1980,6 +1980,103 @@ app.post("/api/qz/sign", (req, res) => {
     res.status(500).send("Error firmando solicitud QZ");
   }
 });
+ 
+
+// ==========================================
+// MERCADO PAGO - VERIFICAR CONEXIÓN
+// ==========================================
+
+app.get("/api/mercadopago/test", async (req, res) => {
+  try {
+    // 1. Obtener token de sesión
+    const authorization = String(req.headers.authorization || "");
+
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    if (!accessToken) {
+      return res.status(401).json({
+        ok: false,
+        error: "Sesión no válida.",
+      });
+    }
+
+    // 2. Validar sesión con Supabase
+    const {
+      data: { user: authUser },
+      error: authError,
+    } = await supabaseAuth.auth.getUser(accessToken);
+
+    if (authError || !authUser) {
+      return res.status(401).json({
+        ok: false,
+        error: "La sesión venció o no es válida.",
+      });
+    }
+
+    // 3. Comprobar permisos de superadministrador
+    const { data: usuarioAdmin, error: errorAdmin } = await supabase
+      .from("usuarios")
+      .select("id, rol_global, activo")
+      .eq("auth_user_id", authUser.id)
+      .maybeSingle();
+
+    if (
+      errorAdmin ||
+      !usuarioAdmin ||
+      usuarioAdmin.rol_global !== "superadmin" ||
+      !usuarioAdmin.activo
+    ) {
+      return res.status(403).json({
+        ok: false,
+        error: "No tenés permiso para verificar Mercado Pago.",
+      });
+    }
+
+    // 4. Obtener credencial de prueba desde Railway
+    const mpToken = process.env.MP_ACCESS_TOKEN_TEST;
+
+    if (!mpToken) {
+      return res.status(503).json({
+        ok: false,
+        error: "Mercado Pago no está configurado.",
+      });
+    }
+
+    // 5. Consultar la API de Mercado Pago
+    const respuesta = await fetch("https://api.mercadopago.com/users/me", {
+      headers: {
+        Authorization: `Bearer ${mpToken}`,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!respuesta.ok) {
+      console.error("Mercado Pago respondió:", respuesta.status);
+
+      return res.status(502).json({
+        ok: false,
+        error: "Mercado Pago rechazó la conexión.",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      mensaje: "Conexión con Mercado Pago exitosa.",
+    });
+  } catch (error) {
+    console.error("Error verificando Mercado Pago:", error.message);
+
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudo verificar la conexión con Mercado Pago.",
+    });
+  }
+});
+
+
+
 const PORT = Number(process.env.PORT) || 3001;
 
 app.listen(PORT, "0.0.0.0", () => {
