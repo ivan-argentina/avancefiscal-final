@@ -56,6 +56,7 @@ export default function Factura() {
 
   const [openFoto, setOpenFoto] = useState(false);
   const [fotoSeleccionada, setFotoSeleccionada] = useState("");
+  const [autocompleteAbierto, setAutocompleteAbierto] = useState(false);
 
   const [numeroFactura, setNumeroFactura] = useState("");
   const [letraComprobante, setLetraComprobante] = useState("B");
@@ -237,6 +238,59 @@ export default function Factura() {
     setInputArticulo(articulo.descripcion || "");
     setPrecio(Number(articulo.precio) || 0);
     setCantidad(1);
+  };
+
+  const agregarArticuloEscaneado = (articulo) => {
+    if (!articulo) return;
+
+    setDetalle((prev) => {
+      const existente = prev.find(
+        (item) =>
+          item.idarticulo === articulo.id &&
+          Number(item.descuento_porcentaje || 0) === 0,
+      );
+
+      if (existente) {
+        return prev.map((item) =>
+          item.id === existente.id
+            ? {
+                ...item,
+                cantidad: Number(item.cantidad) + 1,
+                subtotal:
+                  (Number(item.cantidad) + 1) *
+                  Number(item.precio) *
+                  (1 - Number(item.descuento_porcentaje || 0) / 100),
+              }
+            : item,
+        );
+      }
+
+      return [
+        ...prev,
+        {
+          id: Date.now(),
+          idarticulo: articulo.id,
+          articulo: articulo.descripcion,
+          descripcion: articulo.descripcion,
+          cantidad: 1,
+          precio: Number(articulo.precio) || 0,
+          alicuota_iva: Number(articulo.alicuota_iva ?? 21),
+          descuento_porcentaje: 0,
+          subtotal: Number(articulo.precio) || 0,
+          imagen_url: articulo.imagen_url || "",
+          codigo: articulo.codigo || "",
+        },
+      ];
+    });
+
+    setArticuloId("");
+    setArticuloSeleccionado(null);
+    setInputArticulo("");
+    setCantidad(1);
+    setPrecio("");
+    setDescuento(0);
+
+    setTimeout(() => inputArticuloRef.current?.focus(), 0);
   };
 
   const buscarPorCodigoODescripcion = async (valor) => {
@@ -1389,6 +1443,9 @@ export default function Factura() {
           <Grid container spacing={2} alignItems="center">
             <Grid size={{ xs: 12, md: 4.5 }}>
               <Autocomplete
+                open={autocompleteAbierto}
+                onOpen={() => setAutocompleteAbierto(true)}
+                onClose={() => setAutocompleteAbierto(false)}
                 options={articulos || []}
                 size="small"
                 fullWidth
@@ -1472,7 +1529,15 @@ export default function Factura() {
                           await buscarPorCodigoODescripcion(texto);
 
                         if (articulo) {
-                          elegirArticulo(articulo);
+                          const esCodigoExacto =
+                            String(articulo.codigo || "").trim() === texto;
+                          if (esCodigoExacto) {
+                            setAutocompleteAbierto(false);
+                            agregarArticuloEscaneado(articulo);
+                          } else {
+                            setAutocompleteAbierto(false);
+                            elegirArticulo(articulo);
+                          }
                         } else {
                           mostrarNotificacion(
                             "Artículo no encontrado",
