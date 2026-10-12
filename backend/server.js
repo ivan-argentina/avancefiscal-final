@@ -377,14 +377,16 @@ app.get("/api/mercadopago/estado", async (req, res) => {
       : "";
 
     const idempresa = String(req.query.idempresa || "");
+    console.log("Mercado Pago - ID recibido:", JSON.stringify(idempresa));
+    console.log("Mercado Pago - Parámetros:", req.query);
 
     if (
-      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+     !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
     ) {
       return res.status(400).json({
-        ok: false,
-        error: "Empresa inválida.",
-      });
+      ok: false,
+      error: "Empresa inválida.",
+    });
     }
 
     const autorizado = await autorizarEmpresaMP(accessToken, idempresa);
