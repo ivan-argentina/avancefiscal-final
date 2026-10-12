@@ -127,6 +127,28 @@ const autorizarEmpresaMP = async (accessToken, idempresa) => {
   return !errorRelacion && !!relacion;
 };
 
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+);
+const supabaseAuth = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  },
+);
+const resend = new Resend(process.env.RESEND_API_KEY);
+const app = express();
+
+app.use(cors());
+
+app.use(express.json({ limit: "25mb" }));
+app.use(express.urlencoded({ limit: "25mb", extended: true }));
 app.get("/api/mercadopago/oauth/callback", async (req, res) => {
   try {
     const code = String(req.query.code || "");
@@ -559,28 +581,6 @@ if (conexionExistente) {
     });
   }
 }); 
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-);
-const supabaseAuth = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY,
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
-  },
-);
-const resend = new Resend(process.env.RESEND_API_KEY);
-const app = express();
-
-app.use(cors());
-
-app.use(express.json({ limit: "25mb" }));
-app.use(express.urlencoded({ limit: "25mb", extended: true }));
 
 const prepararFacturaFiscal = (factura) => {
   const empresa = factura.empresas;
