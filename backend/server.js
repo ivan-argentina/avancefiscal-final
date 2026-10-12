@@ -429,6 +429,103 @@ app.get("/api/mercadopago/estado", async (req, res) => {
   }
 });
 
+// =====================================================
+// MERCADO PAGO - CONSULTA DE PAGOS POR EMPRESA
+// =====================================================
+app.get("/api/mercadopago/pagos", async (req, res) => {
+  try {
+    const authorization = String(req.headers.authorization || "");
+    const accessToken = authorization.startsWith("Bearer ")
+      ? authorization.slice(7).trim()
+      : "";
+
+    const idempresa = String(req.query.idempresa || "");
+
+    if (
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: "Empresa inválida.",
+      });
+    }
+
+    const autorizado = await autorizarEmpresaMP(accessToken, idempresa);
+
+    if (!autorizado) {
+      return res.status(403).json({
+        ok: false,
+        error: "No tenés permiso para consultar los pagos de esta empresa.",
+      });
+    }
+
+    const { data: conexion, error: errorConexion } = await supabase
+      .from("mercadopago_conexiones")
+      .select("access_token_cifrado, estado")
+      .eq("idempresa", idempresa)
+      .maybeSingle();
+
+    if (errorConexion) {
+      throw errorConexion;
+    }
+
+    if (
+      conexion?.estado !== "conectada" ||
+      !conexion.access_token_cifrado
+    ) {
+      return res.status(409).json({
+        ok: false,
+        error: "Esta empresa no tiene Mercado Pago conectado.",
+      });
+    }
+
+    const tokenMP = descifrarTokenMP(conexion.access_token_cifrado);
+
+    const url = new URL("https://api.mercadopago.com/v1/payments/search");
+    url.searchParams.set("sort", "date_created");
+    url.searchParams.set("criteria", "desc");
+    url.searchParams.set("limit", "30");
+    url.searchParams.set("offset", "0");
+
+    const respuestaMP = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${tokenMP}`,
+      },
+    });
+
+    if (!respuestaMP.ok) {
+      console.error("Error consultando pagos MP:", respuestaMP.status);
+
+      return res.status(502).json({
+        ok: false,
+        error: "No se pudieron consultar los pagos en Mercado Pago.",
+      });
+    }
+
+    const resultadoMP = await respuestaMP.json();
+
+    const pagos = (resultadoMP.results || []).map((pago) => ({
+      id: pago.id,
+      fecha: pago.date_created,
+      importe: pago.transaction_amount,
+      estado: pago.status,
+      descripcion: pago.description || "",
+      medio_pago: pago.payment_method_id || "",
+    }));
+
+    return res.json({
+      ok: true,
+      pagos,
+    });
+  } catch (error) {
+    console.error("Error consultando pagos Mercado Pago:", error.message);
+
+    return res.status(500).json({
+      ok: false,
+      error: "No se pudieron consultar los pagos de Mercado Pago.",
+    });
+  }
+});
 
 const MP_OAUTH_REDIRECT_URI =
   "https://avancefiscal-final-production.up.railway.app/api/mercadopago/oauth/callback";
