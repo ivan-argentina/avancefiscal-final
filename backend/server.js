@@ -503,14 +503,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
     }
 
     const resultadoMP = await respuestaMP.json();
-    console.log(
-  "Campos disponibles del pagador MP:",
-  (resultadoMP.results || []).slice(0, 3).map((pago) => ({
-    id: pago.id,
-    payer: pago.payer,
-    additional_info: pago.additional_info,
-  }))
-);
+   
 
     const pagos = (resultadoMP.results || [])
   .filter(
