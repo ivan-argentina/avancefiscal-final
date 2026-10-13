@@ -19,6 +19,7 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  Alert,
 } from "@mui/material";
 
 import ConfirmDialog from "../componentes/ConfirmDialog";
@@ -961,6 +962,7 @@ export default function Caja() {
                   <TableRow>
                     <TableCell>Fecha</TableCell>
                     <TableCell>Operación</TableCell>
+                    <TableCell>Pagador</TableCell>
                     <TableCell>Estado</TableCell>
                     <TableCell align="right">Importe</TableCell>
                   </TableRow>
@@ -975,6 +977,7 @@ export default function Caja() {
                           : "-"}
                       </TableCell>
                       <TableCell>{pago.id}</TableCell>
+                      <TableCell>{pago.pagador || "No informado"}</TableCell>
                       <TableCell>{pago.estado}</TableCell>
                       <TableCell align="right">
                         $ {formatoMoneda(pago.importe)}

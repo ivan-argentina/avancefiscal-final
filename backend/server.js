@@ -504,14 +504,28 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
 
     const resultadoMP = await respuestaMP.json();
 
-    const pagos = (resultadoMP.results || []).map((pago) => ({
-      id: pago.id,
-      fecha: pago.date_created,
-      importe: pago.transaction_amount,
-      estado: pago.status,
-      descripcion: pago.description || "",
-      medio_pago: pago.payment_method_id || "",
-    }));
+    const pagos = (resultadoMP.results || [])
+  .filter(
+    (pago) =>
+      pago.status === "approved" &&
+      pago.operation_type === "regular_payment" &&
+      Number(pago.transaction_amount) > 0 &&
+      Number(pago.transaction_amount_refunded || 0) === 0
+  )
+  .map((pago) => ({
+    id: pago.id,
+    fecha: pago.date_approved || pago.date_created,
+    importe: pago.transaction_amount,
+    estado: pago.status,
+    descripcion: pago.description || "",
+    medio_pago: pago.payment_method_id || "",
+    pagador:
+      [pago.payer?.first_name, pago.payer?.last_name]
+        .filter(Boolean)
+        .join(" ") ||
+      pago.payer?.email ||
+      "No informado",
+  }));
 
     return res.json({
       ok: true,
