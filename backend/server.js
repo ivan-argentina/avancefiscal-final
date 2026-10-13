@@ -310,7 +310,7 @@ app.post("/api/mercadopago/desconectar", async (req, res) => {
 
     if (
       typeof idempresa !== "string" ||
-      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
     ) {
       return res.status(400).json({
         ok: false,
