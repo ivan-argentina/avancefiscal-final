@@ -74,8 +74,6 @@ const descifrarTokenMP = (textoCifrado) => {
   return descifrado.toString("utf8");
 };
 
-
-
 const autorizarEmpresaMP = async (accessToken, idempresa) => {
   if (!accessToken || !idempresa) {
     return false;
@@ -127,7 +125,6 @@ const autorizarEmpresaMP = async (accessToken, idempresa) => {
   return !errorRelacion && !!relacion;
 };
 
-
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY,
@@ -158,10 +155,7 @@ app.get("/api/mercadopago/oauth/callback", async (req, res) => {
       return res.status(400).send("Autorización de Mercado Pago inválida.");
     }
 
-    const stateHash = crypto
-      .createHash("sha256")
-      .update(state)
-      .digest("hex");
+    const stateHash = crypto.createHash("sha256").update(state).digest("hex");
 
     // Consumir el state una sola vez.
     const { data: estados, error: errorEstado } = await supabase.rpc(
@@ -170,16 +164,14 @@ app.get("/api/mercadopago/oauth/callback", async (req, res) => {
     );
 
     if (errorEstado || estados?.length !== 1) {
-      return res.status(400).send(
-        "La autorización venció o ya fue utilizada. Volvé a iniciar la conexión.",
-      );
+      return res
+        .status(400)
+        .send(
+          "La autorización venció o ya fue utilizada. Volvé a iniciar la conexión.",
+        );
     }
 
-    const {
-      idempresa,
-      idusuario,
-      mp_oauth_version: versionOAuth,
-    } = estados[0];
+    const { idempresa, idusuario, mp_oauth_version: versionOAuth } = estados[0];
 
     // Revalidar usuario, relación y empresa después del retorno OAuth.
     const { data: usuario, error: errorUsuario } = await supabase
@@ -194,12 +186,7 @@ app.get("/api/mercadopago/oauth/callback", async (req, res) => {
       .eq("id", idempresa)
       .maybeSingle();
 
-    if (
-      errorUsuario ||
-      errorEmpresa ||
-      !usuario?.activo ||
-      !empresa?.activo
-    ) {
+    if (errorUsuario || errorEmpresa || !usuario?.activo || !empresa?.activo) {
       return res.status(403).send("Usuario o empresa sin autorización.");
     }
 
@@ -218,77 +205,78 @@ app.get("/api/mercadopago/oauth/callback", async (req, res) => {
     }
 
     // Intercambiar el código OAuth por los tokens.
-    const respuesta = await fetch(
-      "https://api.mercadopago.com/oauth/token",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({
-          client_id: process.env.MP_CLIENT_ID,
-          client_secret: process.env.MP_CLIENT_SECRET,
-          grant_type: "authorization_code",
-          code,
-          redirect_uri: MP_OAUTH_REDIRECT_URI,
-        }),
-        signal: AbortSignal.timeout(15000),
+    const respuesta = await fetch("https://api.mercadopago.com/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
       },
-    );
+      body: new URLSearchParams({
+        client_id: process.env.MP_CLIENT_ID,
+        client_secret: process.env.MP_CLIENT_SECRET,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: MP_OAUTH_REDIRECT_URI,
+      }),
+      signal: AbortSignal.timeout(15000),
+    });
 
     if (!respuesta.ok) {
       console.error("Error OAuth Mercado Pago:", respuesta.status);
-      return res.status(502).send(
-        "Mercado Pago no pudo completar la autorización.",
-      );
+      return res
+        .status(502)
+        .send("Mercado Pago no pudo completar la autorización.");
     }
 
     const tokens = await respuesta.json();
 
     if (!tokens.access_token || !tokens.refresh_token || !tokens.user_id) {
-      return res.status(502).send(
-        "Mercado Pago devolvió una respuesta incompleta.",
-      );
+      return res
+        .status(502)
+        .send("Mercado Pago devolvió una respuesta incompleta.");
     }
 
     const vencimiento = new Date(
       Date.now() + Number(tokens.expires_in || 0) * 1000,
     ).toISOString();
 
-   const { data: conexionGuardada, error: errorGuardar } = await supabase.rpc(
-  "guardar_conexion_oauth_mp",
-  {
-    p_idempresa: idempresa,
-    p_idusuario: idusuario,
-    p_version_oauth: versionOAuth,
-    p_mp_user_id: String(tokens.user_id),
-    p_access_token_cifrado: cifrarTokenMP(tokens.access_token),
-    p_refresh_token_cifrado: cifrarTokenMP(tokens.refresh_token),
-    p_token_vencimiento: vencimiento,
-  },
-);
+    const { data: conexionGuardada, error: errorGuardar } = await supabase.rpc(
+      "guardar_conexion_oauth_mp",
+      {
+        p_idempresa: idempresa,
+        p_idusuario: idusuario,
+        p_version_oauth: versionOAuth,
+        p_mp_user_id: String(tokens.user_id),
+        p_access_token_cifrado: cifrarTokenMP(tokens.access_token),
+        p_refresh_token_cifrado: cifrarTokenMP(tokens.refresh_token),
+        p_token_vencimiento: vencimiento,
+      },
+    );
 
     if (errorGuardar) {
       console.error("Error guardando conexión MP:", errorGuardar.message);
-      return res.status(500).send(
-        "No se pudo guardar la conexión de Mercado Pago.",
-      );
+      return res
+        .status(500)
+        .send("No se pudo guardar la conexión de Mercado Pago.");
     }
     if (conexionGuardada !== true) {
-  return res.status(409).send(
-    "No se pudo completar la conexión. La empresa ya tiene Mercado Pago conectado o la autorización dejó de ser válida.",
-  );
-}
+      return res
+        .status(409)
+        .send(
+          "No se pudo completar la conexión. La empresa ya tiene Mercado Pago conectado o la autorización dejó de ser válida.",
+        );
+    }
 
-    return res.status(200).send(
-      "¡Mercado Pago conectado correctamente! Ya podés volver a Avance Fiscal.",
-    );
+    return res
+      .status(200)
+      .send(
+        "¡Mercado Pago conectado correctamente! Ya podés volver a Avance Fiscal.",
+      );
   } catch (error) {
     console.error("Error callback Mercado Pago:", error.message);
 
-    return res.status(500).send(
-      "No se pudo completar la conexión con Mercado Pago.",
-    );
+    return res
+      .status(500)
+      .send("No se pudo completar la conexión con Mercado Pago.");
   }
 });
 app.post("/api/mercadopago/desconectar", async (req, res) => {
@@ -310,7 +298,9 @@ app.post("/api/mercadopago/desconectar", async (req, res) => {
 
     if (
       typeof idempresa !== "string" ||
-      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        idempresa,
+      )
     ) {
       return res.status(400).json({
         ok: false,
@@ -327,30 +317,32 @@ app.post("/api/mercadopago/desconectar", async (req, res) => {
       });
     }
 
-  // Desconectar e invalidar autorizaciones en una sola transacción.
-const { data: desconectado, error: errorDesconexion } =
-  await supabase.rpc("desconectar_mercadopago_mp", {
-    p_idempresa: idempresa,
-  });
+    // Desconectar e invalidar autorizaciones en una sola transacción.
+    const { data: desconectado, error: errorDesconexion } = await supabase.rpc(
+      "desconectar_mercadopago_mp",
+      {
+        p_idempresa: idempresa,
+      },
+    );
 
-if (errorDesconexion) {
-  console.error(
-    "Error desconectando Mercado Pago:",
-    errorDesconexion.message,
-  );
+    if (errorDesconexion) {
+      console.error(
+        "Error desconectando Mercado Pago:",
+        errorDesconexion.message,
+      );
 
-  return res.status(500).json({
-    ok: false,
-    error: "No se pudo desconectar Mercado Pago.",
-  });
-}
+      return res.status(500).json({
+        ok: false,
+        error: "No se pudo desconectar Mercado Pago.",
+      });
+    }
 
-if (desconectado !== true) {
-  return res.status(404).json({
-    ok: false,
-    error: "No se encontró la empresa.",
-  });
-}
+    if (desconectado !== true) {
+      return res.status(404).json({
+        ok: false,
+        error: "No se encontró la empresa.",
+      });
+    }
 
     return res.json({
       ok: true,
@@ -366,8 +358,6 @@ if (desconectado !== true) {
   }
 });
 
-
-
 app.get("/api/mercadopago/estado", async (req, res) => {
   try {
     const authorization = String(req.headers.authorization || "");
@@ -381,12 +371,14 @@ app.get("/api/mercadopago/estado", async (req, res) => {
     console.log("Mercado Pago - Parámetros:", req.query);
 
     if (
-     !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        idempresa,
+      )
     ) {
       return res.status(400).json({
-      ok: false,
-      error: "Empresa inválida.",
-    });
+        ok: false,
+        error: "Empresa inválida.",
+      });
     }
 
     const autorizado = await autorizarEmpresaMP(accessToken, idempresa);
@@ -442,7 +434,9 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
     const idempresa = String(req.query.idempresa || "");
 
     if (
-      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        idempresa,
+      )
     ) {
       return res.status(400).json({
         ok: false,
@@ -469,10 +463,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
       throw errorConexion;
     }
 
-    if (
-      conexion?.estado !== "conectada" ||
-      !conexion.access_token_cifrado
-    ) {
+    if (conexion?.estado !== "conectada" || !conexion.access_token_cifrado) {
       return res.status(409).json({
         ok: false,
         error: "Esta empresa no tiene Mercado Pago conectado.",
@@ -503,30 +494,36 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
     }
 
     const resultadoMP = await respuestaMP.json();
-   
+    console.log(
+      "MP - Tipos de operaciones recibidas:",
+      (resultadoMP.results || []).map((pago) => ({
+        tipo: pago.operation_type,
+        estado: pago.status,
+      })),
+    );
 
     const pagos = (resultadoMP.results || [])
-  .filter(
-    (pago) =>
-      pago.status === "approved" &&
-      pago.operation_type === "regular_payment" &&
-      Number(pago.transaction_amount) > 0 &&
-      Number(pago.transaction_amount_refunded || 0) === 0
-  )
-  .map((pago) => ({
-    id: pago.id,
-    fecha: pago.date_approved || pago.date_created,
-    importe: pago.transaction_amount,
-    estado: pago.status,
-    descripcion: pago.description || "",
-    medio_pago: pago.payment_method_id || "",
-    pagador:
-      [pago.payer?.first_name, pago.payer?.last_name]
-        .filter(Boolean)
-        .join(" ") ||
-      pago.payer?.email ||
-      "No informado",
-  }));
+      .filter(
+        (pago) =>
+          pago.status === "approved" &&
+          pago.operation_type === "regular_payment" &&
+          Number(pago.transaction_amount) > 0 &&
+          Number(pago.transaction_amount_refunded || 0) === 0,
+      )
+      .map((pago) => ({
+        id: pago.id,
+        fecha: pago.date_approved || pago.date_created,
+        importe: pago.transaction_amount,
+        estado: pago.status,
+        descripcion: pago.description || "",
+        medio_pago: pago.payment_method_id || "",
+        pagador:
+          [pago.payer?.first_name, pago.payer?.last_name]
+            .filter(Boolean)
+            .join(" ") ||
+          pago.payer?.email ||
+          "No informado",
+      }));
 
     return res.json({
       ok: true,
@@ -545,7 +542,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
 const MP_OAUTH_REDIRECT_URI =
   "https://avancefiscal-final-production.up.railway.app/api/mercadopago/oauth/callback";
 
- app.post("/api/mercadopago/oauth/iniciar", async (req, res) => {
+app.post("/api/mercadopago/oauth/iniciar", async (req, res) => {
   try {
     const authorization = String(req.headers.authorization || "");
     const accessToken = authorization.startsWith("Bearer ")
@@ -556,7 +553,9 @@ const MP_OAUTH_REDIRECT_URI =
 
     if (
       typeof idempresa !== "string" ||
-      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idempresa)
+      !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+        idempresa,
+      )
     ) {
       return res.status(400).json({
         ok: false,
@@ -573,32 +572,30 @@ const MP_OAUTH_REDIRECT_URI =
       });
     }
 
-    
-
     // Impedir iniciar otra conexión si la empresa ya tiene una activa.
-const { data: conexionExistente, error: errorConexion } = await supabase
-  .from("mercadopago_conexiones")
-  .select("id")
-  .eq("idempresa", idempresa)
-  .eq("estado", "conectada")
-  .maybeSingle();
+    const { data: conexionExistente, error: errorConexion } = await supabase
+      .from("mercadopago_conexiones")
+      .select("id")
+      .eq("idempresa", idempresa)
+      .eq("estado", "conectada")
+      .maybeSingle();
 
-if (errorConexion) {
-  console.error("Error consultando conexión MP:", errorConexion.message);
+    if (errorConexion) {
+      console.error("Error consultando conexión MP:", errorConexion.message);
 
-  return res.status(500).json({
-    ok: false,
-    error: "No se pudo verificar la conexión de Mercado Pago.",
-  });
-}
+      return res.status(500).json({
+        ok: false,
+        error: "No se pudo verificar la conexión de Mercado Pago.",
+      });
+    }
 
-if (conexionExistente) {
-  return res.status(409).json({
-    ok: false,
-    error:
-      "Esta empresa ya tiene una cuenta de Mercado Pago conectada. Primero debés desconectarla.",
-  });
-}
+    if (conexionExistente) {
+      return res.status(409).json({
+        ok: false,
+        error:
+          "Esta empresa ya tiene una cuenta de Mercado Pago conectada. Primero debés desconectarla.",
+      });
+    }
     const clientId = process.env.MP_CLIENT_ID;
 
     if (!clientId) {
@@ -634,24 +631,21 @@ if (conexionExistente) {
     }
 
     // Obtener la versión de seguridad OAuth de la empresa.
-  const { data: empresaMP, error: errorEmpresaMP } = await supabase
-    .from("empresas")
-    .select("mp_oauth_version")
-    .eq("id", idempresa)
-    .single();
+    const { data: empresaMP, error: errorEmpresaMP } = await supabase
+      .from("empresas")
+      .select("mp_oauth_version")
+      .eq("id", idempresa)
+      .single();
 
-  if (errorEmpresaMP || !empresaMP?.mp_oauth_version) {
-    return res.status(500).json({
-      ok: false,
-      error: "No se pudo verificar la seguridad OAuth de la empresa.",
-    });
-  }
-    
+    if (errorEmpresaMP || !empresaMP?.mp_oauth_version) {
+      return res.status(500).json({
+        ok: false,
+        error: "No se pudo verificar la seguridad OAuth de la empresa.",
+      });
+    }
+
     const state = crypto.randomBytes(32).toString("hex");
-    const stateHash = crypto
-      .createHash("sha256")
-      .update(state)
-      .digest("hex");
+    const stateHash = crypto.createHash("sha256").update(state).digest("hex");
 
     const venceEn = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
@@ -694,7 +688,7 @@ if (conexionExistente) {
       error: "No se pudo iniciar la conexión con Mercado Pago.",
     });
   }
-}); 
+});
 
 const prepararFacturaFiscal = (factura) => {
   const empresa = factura.empresas;
@@ -1483,7 +1477,6 @@ app.get("/api/fiscal/verificar-conexion", async (req, res) => {
     });
   }
 });
-
 
 app.get("/api/fiscal/ultimo", async (req, res) => {
   try {
@@ -2643,7 +2636,6 @@ app.post("/api/qz/sign", (req, res) => {
     res.status(500).send("Error firmando solicitud QZ");
   }
 });
- 
 
 // ==========================================
 // MERCADO PAGO - VERIFICAR CONEXIÓN
@@ -2737,8 +2729,6 @@ app.get("/api/mercadopago/test", async (req, res) => {
     });
   }
 });
-
-
 
 const PORT = Number(process.env.PORT) || 3001;
 
