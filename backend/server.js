@@ -493,13 +493,17 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
       });
     }
 
-    const resultadoMP = await respuestaMP.json();
     console.log(
-      "MP - Tipos de operaciones recibidas:",
-      (resultadoMP.results || []).map((pago) => ({
-        tipo: pago.operation_type,
-        estado: pago.status,
-      })),
+      "MP - Resumen de transferencias:",
+      (resultadoMP.results || [])
+        .filter((pago) => pago.operation_type === "money_transfer")
+        .map((pago) => ({
+          id: pago.id,
+          tipo: pago.operation_type,
+          estado: pago.status,
+          importe: pago.transaction_amount,
+          neto: pago.transaction_details?.net_received_amount,
+        })),
     );
 
     const pagos = (resultadoMP.results || [])
