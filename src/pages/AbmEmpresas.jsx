@@ -391,6 +391,46 @@ export default function AbmEmpresas() {
     }
   };
 
+  const verificarConexionMercadoPago = async () => {
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("La sesión no es válida.");
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        throw new Error("No está configurada la URL del backend.");
+      }
+
+      const respuesta = await fetch(
+        `${apiUrl.replace(/\/$/, "")}/api/mercadopago/test`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok || !resultado.ok) {
+        throw new Error(
+          resultado.error || "No se pudo verificar Mercado Pago.",
+        );
+      }
+
+      mostrarNotificacion("Conexión con Mercado Pago exitosa.", "success");
+    } catch (error) {
+      mostrarNotificacion(error.message, "error");
+    }
+  };
+
   const editarEmpresa = (empresa) => {
     setEditandoId(empresa.id);
     setRazonSocial(empresa.razon_social || "");
@@ -915,6 +955,16 @@ export default function AbmEmpresas() {
               disabled={!editandoId || verificandoArca || guardando}
             >
               {verificandoArca ? "Verificando ARCA..." : "Verificar ARCA"}
+            </Button>
+
+            <Button
+              variant="outlined"
+              color="success"
+              sx={{ ml: 1 }}
+              onClick={verificarConexionMercadoPago}
+              disabled={guardando}
+            >
+              Verificar Mercado Pago
             </Button>
           </Grid>
         </Grid>
