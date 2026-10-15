@@ -493,6 +493,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
       });
     }
 
+       const resultadoMP = await respuestaMP.json();
     console.log(
       "MP - Resumen de transferencias:",
       (resultadoMP.results || [])
