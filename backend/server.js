@@ -494,7 +494,21 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
     }
 
        const resultadoMP = await respuestaMP.json();
-   
+
+   const transferencia375 = (resultadoMP.results || []).find(
+  (pago) =>
+    pago.operation_type === "money_transfer" &&
+    Number(pago.transaction_amount) === 375000
+);
+
+console.log("MP - Transferencia 375000:", JSON.stringify({
+  encontrada: !!transferencia375,
+  tipo: transferencia375?.operation_type,
+  estado: transferencia375?.status,
+  receptor: transferencia375?.collector_id,
+  pagador: transferencia375?.payer?.id,
+  neto: transferencia375?.transaction_details?.net_received_amount,
+}));
        console.log(
         "MP - Fechas de operaciones:",
           JSON.stringify(
