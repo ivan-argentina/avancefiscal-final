@@ -504,6 +504,9 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
           estado: pago.status,
           importe: pago.transaction_amount,
           neto: pago.transaction_details?.net_received_amount,
+          tipoMovimiento: pago.money_release_status,
+receptor: pago.collector_id,
+pagador: pago.payer?.id,
         })),
     );
 
