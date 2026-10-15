@@ -538,6 +538,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
 });
 
 const MP_OAUTH_REDIRECT_URI =
+  process.env.MP_OAUTH_REDIRECT_URI ||
   "https://avancefiscal-final-production.up.railway.app/api/mercadopago/oauth/callback";
 
 app.post("/api/mercadopago/oauth/iniciar", async (req, res) => {
