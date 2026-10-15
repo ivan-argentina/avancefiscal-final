@@ -529,7 +529,7 @@ console.log("MP - Transferencia 375000:", JSON.stringify({
       (
         pago.operation_type === "regular_payment" ||
       (
-        pago.operation_type === "money_transfer" &&
+        ["money_transfer", "account_fund"].includes(pago.operation_type) &&
         conexion.mp_user_id != null &&
         String(pago.collector_id) === String(conexion.mp_user_id)
       )
