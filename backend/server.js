@@ -367,9 +367,6 @@ app.get("/api/mercadopago/estado", async (req, res) => {
       : "";
 
     const idempresa = String(req.query.idempresa || "");
-    console.log("Mercado Pago - ID recibido:", JSON.stringify(idempresa));
-    console.log("Mercado Pago - Parámetros:", req.query);
-
     if (
       !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
         idempresa,
@@ -495,30 +492,6 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
 
        const resultadoMP = await respuestaMP.json();
 
-   const transferencia375 = (resultadoMP.results || []).find(
-  (pago) =>
-    pago.operation_type === "money_transfer" &&
-    Number(pago.transaction_amount) === 375000
-);
-
-console.log("MP - Transferencia 375000:", JSON.stringify({
-  encontrada: !!transferencia375,
-  tipo: transferencia375?.operation_type,
-  estado: transferencia375?.status,
-  receptor: transferencia375?.collector_id,
-  pagador: transferencia375?.payer?.id,
-  neto: transferencia375?.transaction_details?.net_received_amount,
-}));
-       console.log(
-        "MP - Fechas de operaciones:",
-          JSON.stringify(
-          (resultadoMP.results || []).map((pago) => ({
-            fecha: pago.date_created,
-            tipo: pago.operation_type,
-            importe: pago.transaction_amount,
-          }))
-        )
-    );
 
     const pagos = (resultadoMP.results || [])
       .filter(
