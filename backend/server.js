@@ -455,7 +455,7 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
 
     const { data: conexion, error: errorConexion } = await supabase
       .from("mercadopago_conexiones")
-      .select("access_token_cifrado, estado")
+      .select("access_token_cifrado, estado, mp_user_id")
       .eq("idempresa", idempresa)
       .maybeSingle();
 
@@ -523,10 +523,17 @@ console.log("MP - Transferencia 375000:", JSON.stringify({
     const pagos = (resultadoMP.results || [])
       .filter(
         (pago) =>
-          pago.status === "approved" &&
-          pago.operation_type === "regular_payment" &&
-          Number(pago.transaction_amount) > 0 &&
-          Number(pago.transaction_amount_refunded || 0) === 0,
+        pago.status === "approved" &&
+        Number(pago.transaction_amount) > 0 &&
+        Number(pago.transaction_amount_refunded || 0) === 0 &&
+      (
+        pago.operation_type === "regular_payment" ||
+      (
+        pago.operation_type === "money_transfer" &&
+        conexion.mp_user_id != null &&
+        String(pago.collector_id) === String(conexion.mp_user_id)
+      )
+        ),
       )
       .map((pago) => ({
         id: pago.id,
