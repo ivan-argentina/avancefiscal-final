@@ -494,16 +494,16 @@ app.get("/api/mercadopago/pagos", async (req, res) => {
     }
 
        const resultadoMP = await respuestaMP.json();
-    console.log(
-      "MP - Resumen de transferencias:",
-      (resultadoMP.results || [])
-        .filter((pago) => pago.operation_type === "money_transfer")
-        .map((pago) => ({
-          id: pago.id,
-          tipo: pago.operation_type,
-         fecha: pago.date_created,
-         importe: pago.transaction_amount,
-        })),
+   
+       console.log(
+        "MP - Fechas de operaciones:",
+          JSON.stringify(
+          (resultadoMP.results || []).map((pago) => ({
+            fecha: pago.date_created,
+            tipo: pago.operation_type,
+            importe: pago.transaction_amount,
+          }))
+        )
     );
 
     const pagos = (resultadoMP.results || [])
