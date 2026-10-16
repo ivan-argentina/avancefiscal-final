@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Box,
   Typography,
@@ -19,6 +19,7 @@ import {
   MenuItem,
   IconButton,
   Tooltip,
+  Alert,
 } from "@mui/material";
 
 import ConfirmDialog from "../componentes/ConfirmDialog";
@@ -27,6 +28,7 @@ import { obtenerEmpresa } from "../utils/obtenerEmpresa";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 export default function Caja() {
+  const consultandoPagosRef = useRef(false);
   const hoy = new Date().toISOString().split("T")[0];
 
   const [desde, setDesde] = useState(hoy);
@@ -34,6 +36,16 @@ export default function Caja() {
   const [movimientos, setMovimientos] = useState([]);
   const [saldoAnterior, setSaldoAnterior] = useState(0);
   const [cargando, setCargando] = useState(false);
+  const [idEmpresaActiva, setIdEmpresaActiva] = useState(null);
+  const [errorPagosMercadoPago, setErrorPagosMercadoPago] = useState(null);
+  const [mercadoPagoConectado, setMercadoPagoConectado] = useState(false);
+  const [openPagosMercadoPago, setOpenPagosMercadoPago] = useState(false);
+  const [pagosMercadoPago, setPagosMercadoPago] = useState([]);
+  const [cargandoPagosMercadoPago, setCargandoPagosMercadoPago] =
+    useState(false);
+  const [consultandoMercadoPago, setConsultandoMercadoPago] = useState(false);
+  const [mercadoPagoUsuario, setMercadoPagoUsuario] = useState(null);
+  const [errorMercadoPago, setErrorMercadoPago] = useState(null);
   const [openMovimiento, setOpenMovimiento] = useState(false);
   const [tipoMovimiento, setTipoMovimiento] = useState("egreso");
   const [fechaMovimiento, setFechaMovimiento] = useState(hoy);
@@ -70,6 +82,249 @@ export default function Caja() {
     cargarCaja();
   }, [desde, hasta]);
 
+  useEffect(() => {
+    if (!idEmpresaActiva) {
+      setMercadoPagoConectado(false);
+      setMercadoPagoUsuario(null);
+      setErrorMercadoPago(null);
+      return;
+    }
+
+    consultarEstadoMercadoPago(idEmpresaActiva);
+  }, [idEmpresaActiva]);
+
+  const consultarEstadoMercadoPago = async (idEmpresa) => {
+    setConsultandoMercadoPago(true);
+    setErrorMercadoPago(null);
+
+    try {
+      setMercadoPagoConectado(false);
+      setMercadoPagoUsuario(null);
+
+      if (!idEmpresa) return;
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("La sesión no es válida.");
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        throw new Error("No está configurada la URL del backend.");
+      }
+
+      const respuesta = await fetch(
+        `${apiUrl.replace(/\/$/, "")}/api/mercadopago/estado?idempresa=${encodeURIComponent(idEmpresa)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok || !resultado.ok) {
+        throw new Error(
+          resultado.error || "No se pudo consultar Mercado Pago.",
+        );
+      }
+
+      setMercadoPagoConectado(resultado.conectado === true);
+      setMercadoPagoUsuario(resultado.mp_user_id || null);
+    } catch (error) {
+      console.error("Error consultando Mercado Pago:", error);
+      setErrorMercadoPago(error.message);
+    } finally {
+      setConsultandoMercadoPago(false);
+    }
+  };
+
+  const consultarPagosMercadoPago = useCallback(
+    async (automatico = false) => {
+      if (!idEmpresaActiva || !mercadoPagoConectado) return;
+      if (consultandoPagosRef.current) return;
+
+      consultandoPagosRef.current = true;
+
+      if (!automatico) {
+        setOpenPagosMercadoPago(true);
+        setPagosMercadoPago([]);
+      }
+      setCargandoPagosMercadoPago(true);
+      setErrorPagosMercadoPago(null);
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError || !session?.access_token) {
+          throw new Error("La sesión no es válida.");
+        }
+
+        const apiUrl = import.meta.env.VITE_API_URL;
+
+        if (!apiUrl) {
+          throw new Error("No está configurada la URL del backend.");
+        }
+
+        const respuesta = await fetch(
+          `${apiUrl.replace(/\/$/, "")}/api/mercadopago/pagos?idempresa=${encodeURIComponent(idEmpresaActiva)}`,
+          {
+            cache: "no-store",
+            headers: {
+              Authorization: `Bearer ${session.access_token}`,
+            },
+          },
+        );
+
+        const resultado = await respuesta.json();
+
+        if (!respuesta.ok || !resultado.ok) {
+          throw new Error(
+            resultado.error || "No se pudieron consultar los pagos.",
+          );
+        }
+
+        setPagosMercadoPago(resultado.pagos || []);
+      } catch (error) {
+        console.error("Error consultando pagos Mercado Pago:", error);
+        setErrorPagosMercadoPago(error.message);
+      } finally {
+        consultandoPagosRef.current = false;
+        setCargandoPagosMercadoPago(false);
+      }
+    },
+    [idEmpresaActiva, mercadoPagoConectado],
+  );
+  useEffect(() => {
+    if (!openPagosMercadoPago || !idEmpresaActiva || !mercadoPagoConectado) {
+      return;
+    }
+
+    const intervalo = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        consultarPagosMercadoPago(true);
+      }
+    }, 30000);
+
+    return () => clearInterval(intervalo);
+  }, [
+    openPagosMercadoPago,
+    idEmpresaActiva,
+    mercadoPagoConectado,
+    consultarPagosMercadoPago,
+  ]);
+
+  const desconectarMercadoPago = async () => {
+    if (!idEmpresaActiva || !mercadoPagoConectado) return;
+
+    const confirmado = window.confirm(
+      "¿Querés desconectar la cuenta de Mercado Pago de esta empresa?",
+    );
+
+    if (!confirmado) return;
+
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("La sesión no es válida.");
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        throw new Error("No está configurada la URL del backend.");
+      }
+
+      const respuesta = await fetch(
+        `${apiUrl.replace(/\/$/, "")}/api/mercadopago/desconectar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            idempresa: idEmpresaActiva,
+          }),
+        },
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok || !resultado.ok) {
+        throw new Error(
+          resultado.error || "No se pudo desconectar Mercado Pago.",
+        );
+      }
+
+      await consultarEstadoMercadoPago(idEmpresaActiva);
+      alert("Mercado Pago desconectado correctamente.");
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
+  const conectarMercadoPago = async () => {
+    try {
+      if (!idEmpresaActiva) {
+        throw new Error("No hay una empresa activa seleccionada.");
+      }
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session?.access_token) {
+        throw new Error("La sesión no es válida.");
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL;
+
+      if (!apiUrl) {
+        throw new Error("No está configurada la URL del backend.");
+      }
+
+      const respuesta = await fetch(
+        `${apiUrl.replace(/\/$/, "")}/api/mercadopago/oauth/iniciar`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            idempresa: idEmpresaActiva,
+          }),
+        },
+      );
+
+      const resultado = await respuesta.json();
+
+      if (!respuesta.ok || !resultado.ok || !resultado.url) {
+        throw new Error(
+          resultado.error || "No se pudo iniciar la conexión con Mercado Pago.",
+        );
+      }
+
+      window.location.assign(resultado.url);
+    } catch (error) {
+      alert(error.message);
+    }
+  };
+
   const cargarCaja = async () => {
     setCargando(true);
 
@@ -77,12 +332,13 @@ export default function Caja() {
       const usuarioGuardado = JSON.parse(localStorage.getItem("usuario"));
 
       if (!usuarioGuardado) {
+        setIdEmpresaActiva(null);
         setMovimientos([]);
         setSaldoAnterior(0);
         return;
       }
       const idEmpresa = await obtenerEmpresa(usuarioGuardado.id);
-
+      setIdEmpresaActiva(idEmpresa || null);
       if (!idEmpresa) {
         console.error("No hay una empresa activa seleccionada");
         setMovimientos([]);
@@ -292,6 +548,76 @@ export default function Caja() {
       <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
         Caja
       </Typography>
+      {/* Conexión Mercado Pago */}
+      <Paper sx={{ p: 2, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>
+          Mercado Pago
+        </Typography>
+
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Vinculá la cuenta de Mercado Pago de tu empresa para recibir pagos.
+        </Typography>
+
+        {consultandoMercadoPago ? (
+          <CircularProgress size={24} />
+        ) : (
+          <>
+            <Typography sx={{ mb: 2 }}>
+              Estado:{" "}
+              <strong>
+                {errorMercadoPago
+                  ? "Error al consultar"
+                  : mercadoPagoConectado
+                    ? "Conectado"
+                    : "Sin conectar"}
+              </strong>
+            </Typography>
+
+            {errorMercadoPago && (
+              <Typography color="error" sx={{ mb: 2 }}>
+                {errorMercadoPago}
+              </Typography>
+            )}
+
+            {mercadoPagoConectado && mercadoPagoUsuario && (
+              <Typography color="text.secondary" sx={{ mb: 2 }}>
+                Cuenta Mercado Pago: {mercadoPagoUsuario}
+              </Typography>
+            )}
+
+            {!mercadoPagoConectado && (
+              <Button
+                variant="contained"
+                color="success"
+                onClick={conectarMercadoPago || !!errorMercadoPago}
+                disabled={!idEmpresaActiva}
+              >
+                Conectar Mercado Pago
+              </Button>
+            )}
+            {mercadoPagoConectado && (
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={desconectarMercadoPago}
+                disabled={!idEmpresaActiva}
+              >
+                Desconectar Mercado Pago
+              </Button>
+            )}
+            {mercadoPagoConectado && (
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => consultarPagosMercadoPago(false)}
+                sx={{ ml: 2 }}
+              >
+                Ver pagos de Mercado Pago
+              </Button>
+            )}
+          </>
+        )}
+      </Paper>
 
       {/* Filtros de fecha */}
       <Paper sx={{ p: 2, mb: 3 }}>
@@ -635,6 +961,65 @@ export default function Caja() {
           }
         }}
       />
+      {/* Ventana de pagos de Mercado Pago */}
+      <Dialog
+        open={openPagosMercadoPago}
+        onClose={() => setOpenPagosMercadoPago(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Pagos recibidos por Mercado Pago</DialogTitle>
+
+        <DialogContent dividers>
+          {errorPagosMercadoPago ? (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {errorPagosMercadoPago}
+            </Alert>
+          ) : cargandoPagosMercadoPago ? (
+            <Box sx={{ display: "flex", justifyContent: "center", p: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : pagosMercadoPago.length === 0 ? (
+            <Typography>No se encontraron pagos para mostrar.</Typography>
+          ) : (
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Fecha</TableCell>
+                    <TableCell>Operación</TableCell>
+                    <TableCell>Pagador</TableCell>
+                    <TableCell>Estado</TableCell>
+                    <TableCell align="right">Importe</TableCell>
+                  </TableRow>
+                </TableHead>
+
+                <TableBody>
+                  {pagosMercadoPago.map((pago) => (
+                    <TableRow key={pago.id}>
+                      <TableCell>
+                        {pago.fecha
+                          ? new Date(pago.fecha).toLocaleString("es-AR")
+                          : "-"}
+                      </TableCell>
+                      <TableCell>{pago.id}</TableCell>
+                      <TableCell>{pago.pagador || "No informado"}</TableCell>
+                      <TableCell>{pago.estado}</TableCell>
+                      <TableCell align="right">
+                        $ {formatoMoneda(pago.importe)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button onClick={() => setOpenPagosMercadoPago(false)}>Cerrar</Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
