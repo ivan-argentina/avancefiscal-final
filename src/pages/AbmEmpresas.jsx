@@ -602,7 +602,16 @@ export default function AbmEmpresas() {
   ];
 
   return (
-    <Box>
+    <Box
+      sx={{
+        p: { xs: 1, sm: 2 },
+        width: "100%",
+        minWidth: 0,
+        height: "100%",
+        overflowY: "auto",
+        overflowX: "auto",
+      }}
+    >
       <Typography variant="h5" fontWeight="bold" mb={2}>
         Empresas
       </Typography>
