@@ -544,117 +544,164 @@ export default function Caja() {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
-        Caja
-      </Typography>
-      {/* Conexión Mercado Pago */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Mercado Pago
+    <Box
+      sx={{
+        p: { xs: 1.5, sm: 2 },
+        width: "100%",
+        minWidth: 0,
+        height: "100%",
+        overflowY: "auto",
+        overflowX: "auto",
+      }}
+    >
+      {/* Encabezado y Mercado Pago */}
+      <Paper
+        sx={{
+          p: 1.5,
+          mb: 1.5,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 2,
+          flexWrap: "wrap",
+        }}
+      >
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>
+          Caja
         </Typography>
 
-        <Typography color="text.secondary" sx={{ mb: 2 }}>
-          Vinculá la cuenta de Mercado Pago de tu empresa para recibir pagos.
-        </Typography>
-
-        {consultandoMercadoPago ? (
-          <CircularProgress size={24} />
-        ) : (
-          <>
-            <Typography sx={{ mb: 2 }}>
-              Estado:{" "}
-              <strong>
-                {errorMercadoPago
-                  ? "Error al consultar"
-                  : mercadoPagoConectado
-                    ? "Conectado"
-                    : "Sin conectar"}
-              </strong>
-            </Typography>
-
-            {errorMercadoPago && (
-              <Typography color="error" sx={{ mb: 2 }}>
-                {errorMercadoPago}
-              </Typography>
-            )}
-
-            {mercadoPagoConectado && mercadoPagoUsuario && (
-              <Typography color="text.secondary" sx={{ mb: 2 }}>
-                Cuenta Mercado Pago: {mercadoPagoUsuario}
-              </Typography>
-            )}
-
-            {!mercadoPagoConectado && (
-              <Button
-                variant="contained"
-                color="success"
-                onClick={conectarMercadoPago || !!errorMercadoPago}
-                disabled={!idEmpresaActiva}
-              >
-                Conectar Mercado Pago
-              </Button>
-            )}
-            {mercadoPagoConectado && (
-              <Button
-                variant="outlined"
-                color="error"
-                onClick={desconectarMercadoPago}
-                disabled={!idEmpresaActiva}
-              >
-                Desconectar Mercado Pago
-              </Button>
-            )}
-            {mercadoPagoConectado && (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={() => consultarPagosMercadoPago(false)}
-                sx={{ ml: 2 }}
-              >
-                Ver pagos de Mercado Pago
-              </Button>
-            )}
-          </>
-        )}
-      </Paper>
-
-      {/* Filtros de fecha */}
-      <Paper sx={{ p: 2, mb: 3 }}>
         <Box
           sx={{
             display: "flex",
-            gap: 2,
+            alignItems: "center",
+            gap: 1,
+            flexWrap: "wrap",
+          }}
+        >
+          {consultandoMercadoPago ? (
+            <CircularProgress size={20} />
+          ) : (
+            <>
+              <Typography
+                variant="body2"
+                sx={{
+                  fontWeight: 600,
+                  color: errorMercadoPago
+                    ? "error.main"
+                    : mercadoPagoConectado
+                      ? "success.main"
+                      : "text.secondary",
+                }}
+              >
+                Mercado Pago:{" "}
+                {errorMercadoPago
+                  ? "Error"
+                  : mercadoPagoConectado
+                    ? "Conectado"
+                    : "Sin conectar"}
+              </Typography>
+
+              {mercadoPagoConectado && mercadoPagoUsuario && (
+                <Typography variant="caption" color="text.secondary">
+                  Cuenta: {mercadoPagoUsuario}
+                </Typography>
+              )}
+
+              {!mercadoPagoConectado && (
+                <Button
+                  size="small"
+                  variant="contained"
+                  color="success"
+                  onClick={conectarMercadoPago}
+                  disabled={!idEmpresaActiva}
+                >
+                  Conectar
+                </Button>
+              )}
+
+              {mercadoPagoConectado && (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => consultarPagosMercadoPago(false)}
+                  >
+                    Ver pagos
+                  </Button>
+
+                  <Button
+                    size="small"
+                    variant="text"
+                    color="error"
+                    onClick={desconectarMercadoPago}
+                    disabled={!idEmpresaActiva}
+                  >
+                    Desconectar
+                  </Button>
+                </>
+              )}
+
+              {errorMercadoPago && (
+                <Typography variant="caption" color="error">
+                  {errorMercadoPago}
+                </Typography>
+              )}
+            </>
+          )}
+        </Box>
+      </Paper>
+
+      {/* Filtros de fecha */}
+      {/* Filtros de fecha */}
+      <Paper sx={{ px: 1.5, py: 0.75, mb: 1 }}>
+        <Box
+          sx={{
+            display: "flex",
+            gap: 1.5,
             flexWrap: "wrap",
             alignItems: "center",
           }}
         >
           <TextField
+            size="small"
             label="Desde"
             type="date"
             value={desde}
             onChange={(e) => setDesde(e.target.value)}
             InputLabelProps={{ shrink: true }}
+            sx={{ width: 150 }}
           />
 
           <TextField
+            size="small"
             label="Hasta"
             type="date"
             value={hasta}
             onChange={(e) => setHasta(e.target.value)}
             InputLabelProps={{ shrink: true }}
+            sx={{ width: 150 }}
           />
 
           <Box sx={{ flexGrow: 1 }} />
-          <Button variant="outlined" onClick={() => setOpenResumen(true)}>
+
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => setOpenResumen(true)}
+          >
             Resumen
           </Button>
-          <Button variant="contained" onClick={() => setOpenMovimiento(true)}>
+
+          <Button
+            size="small"
+            variant="contained"
+            onClick={() => setOpenMovimiento(true)}
+          >
             Nuevo movimiento
           </Button>
         </Box>
       </Paper>
-
+      {/* Resumen */}
       {/* Resumen */}
       <Box
         sx={{
@@ -664,31 +711,42 @@ export default function Caja() {
             sm: "repeat(2, 1fr)",
             md: "repeat(4, 1fr)",
           },
-          gap: 2,
-          mb: 3,
+          gap: 1,
+          mb: 1,
         }}
       >
-        <Paper sx={{ p: 2 }}>
-          <Typography color="text.secondary">Saldo anterior</Typography>
-          <Typography variant="h6">$ {formatoMoneda(saldoAnterior)}</Typography>
-        </Paper>
+        {[
+          { titulo: "Saldo anterior", valor: saldoAnterior },
+          { titulo: "Ingresos", valor: totalIngresos },
+          { titulo: "Egresos", valor: totalEgresos },
+          { titulo: "Saldo final", valor: saldoFinal },
+        ].map((item) => (
+          <Paper
+            key={item.titulo}
+            sx={{
+              px: 1.5,
+              py: 0.5,
+            }}
+          >
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: "block", lineHeight: 1.3 }}
+            >
+              {item.titulo}
+            </Typography>
 
-        <Paper sx={{ p: 2 }}>
-          <Typography color="text.secondary">Ingresos</Typography>
-          <Typography variant="h6">$ {formatoMoneda(totalIngresos)}</Typography>
-        </Paper>
-
-        <Paper sx={{ p: 2 }}>
-          <Typography color="text.secondary">Egresos</Typography>
-          <Typography variant="h6">$ {formatoMoneda(totalEgresos)}</Typography>
-        </Paper>
-
-        <Paper sx={{ p: 2 }}>
-          <Typography color="text.secondary">Saldo final</Typography>
-          <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            $ {formatoMoneda(saldoFinal)}
-          </Typography>
-        </Paper>
+            <Typography
+              variant="subtitle1"
+              sx={{
+                fontWeight: item.titulo === "Saldo final" ? 700 : 500,
+                lineHeight: 1.4,
+              }}
+            >
+              $ {formatoMoneda(item.valor)}
+            </Typography>
+          </Paper>
+        ))}
       </Box>
 
       {/* Movimientos */}

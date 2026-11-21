@@ -666,11 +666,13 @@ export default function InicioFactu() {
       </Drawer>
 
       {/* Contenido */}
+
       <Box
         component="main"
         sx={{
           flexGrow: 1,
           minWidth: 0,
+          minHeight: 0,
           p: {
             xs: 1.5,
             sm: 2,
@@ -711,7 +713,15 @@ export default function InicioFactu() {
           </Box>
         )}
 
-        <Box sx={{ flexGrow: 1, minHeight: 0, minWidth: 0 }}>
+        <Box
+          sx={{
+            flexGrow: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowY: "auto",
+            overflowX: "auto",
+          }}
+        >
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
 
